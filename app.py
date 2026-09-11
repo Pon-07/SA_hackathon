@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -53,14 +54,14 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Global Typography & Background Adjustments */
+    /* Global Typography & SaaS Theme */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Modern Metric container override */
+    /* Modern Metric Containers */
     div[data-testid="metric-container"] {
         background: rgba(30, 41, 59, 0.65);
         border: 1px solid rgba(51, 65, 85, 0.7);
@@ -275,7 +276,7 @@ st.markdown("""
 DATASET_PATH = Path(__file__).parent / "tickets.csv"
 
 # -------------------------------------------------------------
-# Data Loading & Caching (Read-Only)
+# Data Loading & Caching (Read-Only 1,000 Historical Tickets)
 # -------------------------------------------------------------
 @st.cache_data
 def load_historical_tickets(filepath: Path) -> pd.DataFrame:
@@ -305,13 +306,20 @@ historical_breach_rate = (
 )
 
 # -------------------------------------------------------------
-# Session State Initialization
+# Session State Initialization (Fresh Session = Clean Empty State)
 # -------------------------------------------------------------
+def get_fresh_session_agents():
+    """Start all agents with 0 workload in fresh session."""
+    agents = get_initial_agents()
+    for a in agents:
+        a["load"] = 0
+    return agents
+
 if "current_role" not in st.session_state:
     st.session_state["current_role"] = None
 
 if "agent_pool" not in st.session_state:
-    st.session_state["agent_pool"] = get_initial_agents()
+    st.session_state["agent_pool"] = get_fresh_session_agents()
 
 if "ticket_counter" not in st.session_state:
     st.session_state["ticket_counter"] = 1
@@ -381,7 +389,7 @@ def render_sidebar_status():
 # -------------------------------------------------------------
 def process_new_complaint(subject: str, description: str, affected_users: int = 1) -> dict:
     """
-    Execute full 7-stage pipeline for a new complaint:
+    Execute full 7-stage automated pipeline:
     1. Categorize
     2. Prioritize
     3. Calculate SLA
@@ -484,13 +492,7 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
         "resolution_hours": None,
         "sla_result": None,
         "resolution_notes": "",
-        "messages": [
-            {
-                "sender": "System",
-                "message": f"Support ticket created. Assigned to {assignment_info['assigned_agent']} with {sla_info['resolution_sla_hours']}h resolution target.",
-                "timestamp": created_time
-            }
-        ]
+        "messages": []
     }
     
     st.session_state["session_tickets"].insert(0, ticket_record)
@@ -646,7 +648,7 @@ def render_employee_dashboard():
         with col_left:
             st.subheader("📋 Recent Complaints")
             if not session_tickets:
-                st.info("You haven't submitted any complaints yet. Use **New Complaint** to submit a support request.")
+                st.info("No complaints submitted yet. Submit a new IT support request to get started.")
             else:
                 table_html = """
                 <div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 10px;">
@@ -695,48 +697,18 @@ def render_employee_dashboard():
             """, unsafe_allow_html=True)
 
     # ---------------------------------------------------------
-    # VIEW 2: New Complaint (with Demo Mode quick-fill)
+    # VIEW 2: New Complaint (Clean Real Form)
     # ---------------------------------------------------------
     elif emp_nav == "➕ New Complaint":
         st.header("➕ Submit New IT Complaint")
         st.caption("Provide issue details. Our automated triage engine will categorize, prioritize, and assign your ticket immediately.")
 
-        # 🎬 Demo Mode Scenarios Section
-        st.markdown("##### 🎬 Demo Mode (Quick-Fill Scenarios)")
-        st.caption("Click any scenario to pre-fill the form, then submit to test the live triage pipeline:")
-        col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-        
-        with col_p1:
-            if st.button("🌐 1. VPN Outage", use_container_width=True):
-                st.session_state["emp_subj"] = "Production VPN outage"
-                st.session_state["emp_desc"] = "The production VPN is completely down and all employees are unable to connect."
-                st.session_state["emp_users"] = 100
-        with col_p2:
-            if st.button("🔒 2. Security Incident", use_container_width=True):
-                st.session_state["emp_subj"] = "Phishing email alert"
-                st.session_state["emp_desc"] = "Suspicious email with malicious attachment received by multiple finance employees asking for password reset."
-                st.session_state["emp_users"] = 25
-        with col_p3:
-            if st.button("💻 3. Excel Crash", use_container_width=True):
-                st.session_state["emp_subj"] = "Excel crash on quarterly report"
-                st.session_state["emp_desc"] = "Excel crashes immediately whenever I try to open or save the financial spreadsheet report."
-                st.session_state["emp_users"] = 1
-        with col_p4:
-            if st.button("🖨️ 4. Printer Issue", use_container_width=True):
-                st.session_state["emp_subj"] = "3rd floor printer paper jam"
-                st.session_state["emp_desc"] = "The 3rd floor Xerox office printer is jammed with a red error light and cannot print documents."
-                st.session_state["emp_users"] = 5
-
-        default_s = st.session_state.get("emp_subj", "")
-        default_d = st.session_state.get("emp_desc", "")
-        default_u = st.session_state.get("emp_users", 1)
-
         with st.form("employee_complaint_form"):
-            new_subject = st.text_input("Issue Title:", value=default_s, placeholder="Brief summary of the issue...")
+            new_subject = st.text_input("Issue Title:", placeholder="e.g. VPN not connecting, Excel crashing, Printer offline...")
             col_u1, _ = st.columns([1, 2])
             with col_u1:
-                new_users = st.number_input("Affected Users:", min_value=1, value=int(default_u), step=1)
-            new_desc = st.text_area("Description:", value=default_d, height=120, placeholder="Describe symptoms, error codes, and what you were trying to do...")
+                new_users = st.number_input("Affected Users:", min_value=1, value=1, step=1)
+            new_desc = st.text_area("Description:", height=130, placeholder="Describe symptoms, error codes, and what you were trying to do...")
             submit_btn = st.form_submit_button("Submit Complaint", type="primary", use_container_width=True)
 
         if submit_btn:
@@ -745,14 +717,16 @@ def render_employee_dashboard():
             else:
                 record = process_new_complaint(new_subject, new_desc, new_users)
                 
-                # Reset prefill state
-                st.session_state["emp_subj"] = ""
-                st.session_state["emp_desc"] = ""
-                st.session_state["emp_users"] = 1
+                # Professional Pop-up / Toast Alerts
+                st.toast("Complaint submitted successfully", icon="✅")
+                st.toast(f"Ticket #{record['ticket_id']} created and sent for AI triage.", icon="🤖")
+                st.toast(f"Ticket #{record['ticket_id']} assigned to {record['assigned_agent']}.", icon="🧑‍💼")
+                if record["escalation_status"] != "NO ESCALATION":
+                    st.toast(f"Ticket #{record['ticket_id']} has been escalated for immediate attention.", icon="🚨")
+                if "AT RISK" in record["sla_status"]:
+                    st.toast(f"Warning: Ticket #{record['ticket_id']} is approaching its SLA deadline.", icon="⚠️")
                 
-                st.success("✅ **Complaint submitted successfully!**")
-                
-                # Post-submission confirmation card
+                # Post-submission confirmation card (Employee-Facing)
                 st.markdown(f"""
                 <div style="background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 12px; padding: 22px; margin-top: 15px;">
                     <h3 style="color: #60a5fa; margin-top: 0;">Ticket Confirmation: <code>{record['ticket_id']}</code></h3>
@@ -762,9 +736,10 @@ def render_employee_dashboard():
                         <div><span style="color:#94a3b8; font-size:0.8rem;">Assigned Agent:</span><br><strong>{record['assigned_agent']}</strong></div>
                         <div><span style="color:#94a3b8; font-size:0.8rem;">Response SLA:</span><br><strong>{record['response_sla_hours']} Hours</strong></div>
                         <div><span style="color:#94a3b8; font-size:0.8rem;">Resolution SLA:</span><br><strong>{record['resolution_sla_hours']} Hours</strong></div>
+                        <div><span style="color:#94a3b8; font-size:0.8rem;">Current Status:</span><br>{get_status_badge(record['status'])}</div>
                     </div>
                     <div style="background: rgba(15, 23, 42, 0.6); padding: 12px 16px; border-radius: 8px; font-size: 0.9rem; color: #cbd5e1;">
-                        ⏱️ <strong>Resolution Deadline:</strong> <code>{record['resolution_deadline'].strftime('%d %b %Y, %I:%M %p')}</code> ({record['sla_status']}) | <strong>Status:</strong> {get_status_badge(record['status'])}
+                        ⏱️ <strong>Resolution Deadline:</strong> <code>{record['resolution_deadline'].strftime('%d %b %Y, %I:%M %p')}</code> ({record['sla_status']})
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -777,7 +752,7 @@ def render_employee_dashboard():
         st.caption("Inspect complaint progress, monitor resolution deadlines, and communicate in real time with your assigned IT technician.")
 
         if not session_tickets:
-            st.info("You haven't submitted any complaints yet. Use **New Complaint** to submit a support request.")
+            st.info("No complaints submitted yet. Use **New Complaint** to submit a support request.")
         else:
             col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
@@ -881,7 +856,7 @@ def render_employee_dashboard():
                 
                 chat_html = '<div class="chat-container">'
                 if not messages:
-                    chat_html += '<div style="text-align:center; color:#64748b; font-size:0.85rem;">No messages yet. Send a message below to reach your technician.</div>'
+                    chat_html += '<div style="text-align:center; color:#94a3b8; font-size:0.85rem; padding:10px;">No messages yet. Start a conversation with IT Support.</div>'
                 else:
                     for msg in messages:
                         sender = msg["sender"]
@@ -921,6 +896,7 @@ def render_employee_dashboard():
                         "message": emp_msg_input.strip(),
                         "timestamp": datetime.now()
                     })
+                    st.toast("Message sent to IT Agent.", icon="📨")
                     st.rerun()
 
     # ---------------------------------------------------------
@@ -931,7 +907,7 @@ def render_employee_dashboard():
         st.caption("Official incident summary report and record documentation.")
 
         if not session_tickets:
-            st.info("You haven't submitted any complaints yet. Use **New Complaint** to submit a support request.")
+            st.info("No complaints submitted yet. Use **New Complaint** to submit a support request.")
         else:
             ticket_options = [t["ticket_id"] + " - " + t["subject"] for t in session_tickets]
             chosen_str = st.selectbox("Select Ticket for Report Generation:", ticket_options)
@@ -1075,16 +1051,9 @@ def render_agent_dashboard():
             t["simulated_action"] = esc_res["simulated_action"]
 
     session_tickets = st.session_state["session_tickets"]
-    all_total_tickets = len(df_historical) + len(session_tickets)
     
-    # Historical calculations
-    hist_open = int((df_historical["status"] == "Open").sum()) if "status" in df_historical.columns else 0
-    hist_prog = int((df_historical["status"] == "In Progress").sum()) if "status" in df_historical.columns else 0
-    hist_res = int((df_historical["status"] == "Resolved").sum()) if "status" in df_historical.columns else 0
-    hist_breached = int((df_historical["sla_breached"] == True).sum()) if "sla_breached" in df_historical.columns else 0
-    hist_critical = int((df_historical["priority"] == "Critical").sum()) if "priority" in df_historical.columns else 0
-    
-    # Session calculations
+    # LIVE OPERATIONS Counts (Derived purely from session_tickets)
+    sess_total = len(session_tickets)
     sess_open = sum(1 for t in session_tickets if t["status"] == "Open")
     sess_prog = sum(1 for t in session_tickets if t["status"] == "In Progress")
     sess_res = sum(1 for t in session_tickets if t["status"] == "Resolved")
@@ -1092,13 +1061,8 @@ def render_agent_dashboard():
     sess_at_risk = sum(1 for t in session_tickets if "AT RISK" in t["sla_status"])
     sess_high_risk = sum(1 for t in session_tickets if t["risk_level"] in ["HIGH", "CRITICAL"])
     
-    total_open = hist_open + sess_open
-    total_prog = hist_prog + sess_prog
-    total_res = hist_res + sess_res
-    total_breached = hist_breached + sess_breached
-    total_met = (all_total_tickets - total_breached)
-    overall_compliance = (total_met / all_total_tickets * 100) if all_total_tickets > 0 else 100.0
-    total_high_risk = hist_critical + sess_high_risk
+    live_met = sess_total - sess_breached
+    live_compliance = ((live_met / sess_total) * 100.0) if sess_total > 0 else 100.0
 
     # ---------------------------------------------------------
     # VIEW 1: Operations Overview
@@ -1119,32 +1083,35 @@ def render_agent_dashboard():
 
         st.divider()
 
-        # Top KPI Cards Grid
+        # LIVE OPERATIONS Top KPI Cards Grid
         st.markdown(f"""
+        <div style="margin-bottom: 8px; font-weight: 700; color: #60a5fa; font-size: 0.95rem; letter-spacing: 0.5px;">
+            LIVE OPERATIONS (SESSION)
+        </div>
         <div class="kpi-grid">
             <div class="kpi-card kpi-blue">
-                <div class="kpi-title">TOTAL TICKETS</div>
-                <div class="kpi-value">{all_total_tickets:,}</div>
-                <div class="kpi-sub">Historical + Session</div>
+                <div class="kpi-title">TOTAL LIVE TICKETS</div>
+                <div class="kpi-value">{sess_total}</div>
+                <div class="kpi-sub">Current session</div>
             </div>
             <div class="kpi-card kpi-blue">
                 <div class="kpi-title">OPEN</div>
-                <div class="kpi-value" style="color:#60a5fa;">{total_open:,}</div>
-                <div class="kpi-sub">Unassigned / Pending</div>
+                <div class="kpi-value" style="color:#60a5fa;">{sess_open}</div>
+                <div class="kpi-sub">Awaiting pick-up</div>
             </div>
             <div class="kpi-card kpi-amber">
                 <div class="kpi-title">IN PROGRESS</div>
-                <div class="kpi-value" style="color:#fbbf24;">{total_prog:,}</div>
+                <div class="kpi-value" style="color:#fbbf24;">{sess_prog}</div>
                 <div class="kpi-sub">Active in queue</div>
             </div>
             <div class="kpi-card kpi-green">
                 <div class="kpi-title">RESOLVED</div>
-                <div class="kpi-value" style="color:#34d399;">{total_res:,}</div>
+                <div class="kpi-value" style="color:#34d399;">{sess_res}</div>
                 <div class="kpi-sub">Closed successfully</div>
             </div>
             <div class="kpi-card kpi-red">
                 <div class="kpi-title">SLA BREACHED</div>
-                <div class="kpi-value" style="color:#f87171;">{total_breached:,}</div>
+                <div class="kpi-value" style="color:#f87171;">{sess_breached}</div>
                 <div class="kpi-sub">Missed target SLA</div>
             </div>
             <div class="kpi-card kpi-amber">
@@ -1153,13 +1120,13 @@ def render_agent_dashboard():
                 <div class="kpi-sub">Approaching deadline</div>
             </div>
             <div class="kpi-card kpi-green" style="background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.5);">
-                <div class="kpi-title" style="color:#34d399;">SLA COMPLIANCE</div>
-                <div class="kpi-value" style="color:#34d399;">{overall_compliance:.1f}%</div>
-                <div class="kpi-sub" style="color:#a7f3d0;">Target: &ge; 85.0%</div>
+                <div class="kpi-title" style="color:#34d399;">LIVE SLA COMPLIANCE</div>
+                <div class="kpi-value" style="color:#34d399;">{live_compliance:.1f}%</div>
+                <div class="kpi-sub" style="color:#a7f3d0;">Live session health</div>
             </div>
             <div class="kpi-card kpi-purple">
                 <div class="kpi-title">HIGH/CRITICAL RISK</div>
-                <div class="kpi-value" style="color:#c084fc;">{total_high_risk:,}</div>
+                <div class="kpi-value" style="color:#c084fc;">{sess_high_risk}</div>
                 <div class="kpi-sub">Requiring supervision</div>
             </div>
         </div>
@@ -1171,18 +1138,20 @@ def render_agent_dashboard():
         st.subheader("⏱️ SLA Monitoring")
         col_sla1, col_sla2, col_sla3, col_sla4 = st.columns(4)
         with col_sla1:
-            st.metric("SLA Compliance %", f"{overall_compliance:.1f}%", delta="Normal Health")
+            st.metric("Live SLA Compliance", f"{live_compliance:.1f}%", delta="Normal Health")
         with col_sla2:
-            st.metric("SLA Met Tickets", f"{total_met:,}")
+            st.metric("Live SLA Met", sess_res if sess_breached == 0 else max(0, sess_res - sess_breached))
         with col_sla3:
-            st.metric("SLA Breached Tickets", f"{total_breached:,}")
+            st.metric("Live SLA Breached", sess_breached)
         with col_sla4:
             st.metric("Live Session At Risk", sess_at_risk)
 
         st.write("")
 
         # Live session stream
-        if session_tickets:
+        if not session_tickets:
+            st.info("No active tickets in current session. Once an employee submits a complaint, live triage tracking will appear here.")
+        else:
             st.markdown(f"##### ⚡ Live Incoming Triage Activity ({len(session_tickets)} Session Tickets)")
             stream_html = """
             <div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 10px; margin-bottom: 20px;">
@@ -1218,8 +1187,8 @@ def render_agent_dashboard():
             st.markdown(stream_html, unsafe_allow_html=True)
             st.divider()
 
-        # Operational Charts Grid (Compact Rows)
-        st.subheader("📊 Operational Analytics Grid")
+        # Operational Analytics Grid (Historical Baseline Knowledge)
+        st.markdown("<h4 style='color:#c084fc; margin-top:20px;'>📊 Historical Knowledge Base Analytics (1,000 Tickets)</h4>", unsafe_allow_html=True)
         
         # Row 1
         col_r1_1, col_r1_2 = st.columns(2)
@@ -1239,27 +1208,14 @@ def render_agent_dashboard():
             status_counts = df_historical["status"].value_counts()
             st.bar_chart(status_counts)
         with col_r2_2:
-            st.markdown("##### SLA Met vs Breached")
+            st.markdown("##### SLA Met vs Breached (Historical)")
+            hist_breached = int((df_historical["sla_breached"] == True).sum())
+            hist_met = len(df_historical) - hist_breached
             sla_dist = pd.Series({
-                "SLA Met": total_met,
-                "SLA Breached": total_breached
+                "SLA Met": hist_met,
+                "SLA Breached": hist_breached
             })
             st.bar_chart(sla_dist)
-
-        # Row 3
-        col_r3_1, col_r3_2 = st.columns(2)
-        with col_r3_1:
-            st.markdown("##### Agent Workload")
-            chart_pool_df = pd.DataFrame([
-                {"Agent": a["name"], "Tickets in Queue": a["load"]}
-                for a in st.session_state["agent_pool"]
-            ]).set_index("Agent")
-            st.bar_chart(chart_pool_df)
-        with col_r3_2:
-            st.markdown("##### Historical Breach Rate by Priority")
-            if "priority" in df_historical.columns and "sla_breached" in df_historical.columns:
-                pri_breach = df_historical.groupby("priority")["sla_breached"].mean().round(2) * 100
-                st.bar_chart(pri_breach)
 
     # ---------------------------------------------------------
     # VIEW 2: Active Tickets Queue & AI Decision Trail
@@ -1268,22 +1224,23 @@ def render_agent_dashboard():
         st.header("🎫 Active Tickets")
         st.caption("Manage live queue operations, inspect transparent 🧠 AI Decision Trails, and update ticket statuses.")
 
-        col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(6)
-        with col_f1:
-            f_cat = st.selectbox("Category:", ["All", "Network", "Hardware", "Software", "Email", "Printer", "Security", "Access/Account"])
-        with col_f2:
-            f_pri = st.selectbox("Priority:", ["All", "Critical", "High", "Medium", "Low"])
-        with col_f3:
-            f_stat = st.selectbox("Status:", ["All", "Open", "In Progress", "Resolved"])
-        with col_f4:
-            f_agent = st.selectbox("Agent:", ["All"] + [a["name"] for a in st.session_state["agent_pool"]])
-        with col_f5:
-            f_sla = st.selectbox("SLA Status:", ["All", "ON TRACK", "AT RISK", "BREACHED"])
-        with col_f6:
-            f_risk = st.selectbox("Risk Level:", ["All", "LOW", "MEDIUM", "HIGH", "CRITICAL"])
+        if not session_tickets:
+            st.info("No active tickets in current session. Submit a complaint from the Employee Portal to create live tickets.")
+        else:
+            col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(6)
+            with col_f1:
+                f_cat = st.selectbox("Category:", ["All", "Network", "Hardware", "Software", "Email", "Printer", "Security", "Access/Account"])
+            with col_f2:
+                f_pri = st.selectbox("Priority:", ["All", "Critical", "High", "Medium", "Low"])
+            with col_f3:
+                f_stat = st.selectbox("Status:", ["All", "Open", "In Progress", "Resolved"])
+            with col_f4:
+                f_agent = st.selectbox("Agent:", ["All"] + [a["name"] for a in st.session_state["agent_pool"]])
+            with col_f5:
+                f_sla = st.selectbox("SLA Status:", ["All", "ON TRACK", "AT RISK", "BREACHED"])
+            with col_f6:
+                f_risk = st.selectbox("Risk Level:", ["All", "LOW", "MEDIUM", "HIGH", "CRITICAL"])
 
-        if session_tickets:
-            st.markdown("#### ⚡ Live Incoming Tickets (Session)")
             sess_filtered = session_tickets
             if f_cat != "All":
                 sess_filtered = [t for t in sess_filtered if t["category"] == f_cat]
@@ -1334,14 +1291,11 @@ def render_agent_dashboard():
                 table_html += "</tbody></table></div>"
                 st.markdown(table_html, unsafe_allow_html=True)
             else:
-                st.info("All tickets are currently under control matching the selected filters.")
-        else:
-            st.info("All tickets are currently under control. Submit a complaint in the Employee Portal or use Demo Mode to populate tickets.")
+                st.info("No tickets matching current filters.")
 
-        st.divider()
+            st.divider()
 
-        # Operational Ticket Inspector & Customer Communication
-        if session_tickets:
+            # Operational Ticket Inspector & Customer Communication
             st.subheader("🔍 Operational Ticket Inspector")
             t_opts = [t["ticket_id"] + " - " + t["subject"] for t in session_tickets]
             inspected_str = st.selectbox("Select Session Ticket to Inspect & Manage:", t_opts)
@@ -1406,13 +1360,14 @@ def render_agent_dashboard():
                                     "message": f"Ticket marked as Resolved by IT Agent ({inspected_t['assigned_agent']}). Outcome: {inspected_t['sla_result']} (Resolution Time: {res_h:.1f} hrs).",
                                     "timestamp": resolved_time
                                 })
+                                st.toast(f"Ticket #{inspected_t['ticket_id']} resolved successfully.", icon="✅")
                             else:
                                 inspected_t["messages"].append({
                                     "sender": "System",
                                     "message": f"Ticket status updated to '{new_status_val}' by IT Agent ({inspected_t['assigned_agent']}).",
                                     "timestamp": datetime.now()
                                 })
-                            st.success(f"Status updated to '{new_status_val}'.")
+                                st.toast(f"Ticket #{inspected_t['ticket_id']} moved to {new_status_val}.", icon="🔄")
                             st.rerun()
 
                 st.divider()
@@ -1424,7 +1379,7 @@ def render_agent_dashboard():
                 messages = inspected_t.get("messages", [])
                 chat_html = '<div class="chat-container">'
                 if not messages:
-                    chat_html += '<div style="text-align:center; color:#64748b; font-size:0.85rem;">No messages in this ticket conversation yet.</div>'
+                    chat_html += '<div style="text-align:center; color:#94a3b8; font-size:0.85rem; padding:10px;">No messages yet. Send a reply below to reach the employee.</div>'
                 else:
                     for msg in messages:
                         sender = msg["sender"]
@@ -1464,6 +1419,7 @@ def render_agent_dashboard():
                         "message": agent_reply_input.strip(),
                         "timestamp": datetime.now()
                     })
+                    st.toast("Reply sent to employee.", icon="📨")
                     st.rerun()
 
                 st.divider()
@@ -1573,7 +1529,7 @@ def render_agent_dashboard():
 
         # TAB 2: Historical SLA Alerts
         with tab_hist_esc:
-            st.subheader("Historical SLA Alerts")
+            st.subheader("Historical SLA Alerts (tickets.csv)")
             st.caption("Historical incidents from tickets.csv that triggered SLA alerts (breached SLA, critical priority, or high queue depth).")
 
             hist_alert_filter = st.radio(
@@ -1612,10 +1568,10 @@ def render_agent_dashboard():
             
             for a in st.session_state["agent_pool"]:
                 load = a["load"]
-                if load >= 7:
+                if load >= 5:
                     status_badge = '<span class="badge badge-red">HIGH WORKLOAD</span>'
                     card_border = "#ef4444"
-                elif load >= 4:
+                elif load >= 2:
                     status_badge = '<span class="badge badge-amber">MODERATE WORKLOAD</span>'
                     card_border = "#f59e0b"
                 else:
@@ -1635,8 +1591,8 @@ def render_agent_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
 
-            if st.button("🔄 Reset Agent Workloads to Default", use_container_width=True):
-                st.session_state["agent_pool"] = get_initial_agents()
+            if st.button("🔄 Reset Agent Workloads to 0", use_container_width=True):
+                st.session_state["agent_pool"] = get_fresh_session_agents()
                 st.rerun()
 
         with col_w2:
@@ -1685,23 +1641,27 @@ def render_agent_dashboard():
     # ---------------------------------------------------------
     elif agent_nav == "📈 Analytics":
         st.header("📈 SLA Compliance & Performance Analytics")
-        st.caption("Comprehensive historical and live operational insights across service tiers, categories, and priority levels.")
+        st.caption("Comprehensive historical operational insights from 1,000 reference records.")
 
-        # KPI Metrics
+        # KPI Metrics from Historical Base
+        hist_total = len(df_historical)
+        hist_breached = int((df_historical["sla_breached"] == True).sum())
+        hist_met = hist_total - hist_breached
+        hist_compliance = (hist_met / hist_total * 100.0) if hist_total > 0 else 100.0
         avg_res_h = float(df_historical["resolution_hours"].mean()) if "resolution_hours" in df_historical.columns else 0.0
         breach_pct = float((df_historical["sla_breached"] == True).mean()) * 100.0 if "sla_breached" in df_historical.columns else 0.0
 
         st.markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card kpi-blue">
-                <div class="kpi-title">TOTAL TICKETS ANALYZED</div>
-                <div class="kpi-value">{all_total_tickets:,}</div>
+                <div class="kpi-title">TOTAL HISTORICAL TICKETS</div>
+                <div class="kpi-value">{hist_total:,}</div>
                 <div class="kpi-sub">Reference knowledge base</div>
             </div>
             <div class="kpi-card kpi-green">
-                <div class="kpi-title">OVERALL SLA COMPLIANCE</div>
-                <div class="kpi-value" style="color:#34d399;">{overall_compliance:.1f}%</div>
-                <div class="kpi-sub">{total_met:,} Met vs {total_breached:,} Breached</div>
+                <div class="kpi-title">HISTORICAL SLA COMPLIANCE</div>
+                <div class="kpi-value" style="color:#34d399;">{hist_compliance:.1f}%</div>
+                <div class="kpi-sub">{hist_met:,} Met vs {hist_breached:,} Breached</div>
             </div>
             <div class="kpi-card kpi-amber">
                 <div class="kpi-title">AVG RESOLUTION TIME</div>
@@ -1721,28 +1681,28 @@ def render_agent_dashboard():
         # Detailed Charts
         col_an1, col_an2 = st.columns(2)
         with col_an1:
-            st.subheader("Category Distribution")
+            st.subheader("Category Distribution (Historical)")
             st.bar_chart(df_historical["category"].value_counts())
         with col_an2:
-            st.subheader("Priority Distribution")
+            st.subheader("Priority Distribution (Historical)")
             st.bar_chart(df_historical["priority"].value_counts())
 
         col_an3, col_an4 = st.columns(2)
         with col_an3:
-            st.subheader("Ticket Status Distribution")
+            st.subheader("Ticket Status Distribution (Historical)")
             st.bar_chart(df_historical["status"].value_counts())
         with col_an4:
-            st.subheader("SLA Met vs Breached")
+            st.subheader("SLA Met vs Breached (Historical)")
             sla_dist = pd.Series({
-                "SLA Met": total_met,
-                "SLA Breached": total_breached
+                "SLA Met": hist_met,
+                "SLA Breached": hist_breached
             })
             st.bar_chart(sla_dist)
 
         st.divider()
         col_an5, col_an6 = st.columns(2)
         with col_an5:
-            st.subheader("Agent Workload Distribution")
+            st.subheader("Active Session Agent Workload")
             chart_pool_df = pd.DataFrame([
                 {"Agent": a["name"], "Queue Load": a["load"]}
                 for a in st.session_state["agent_pool"]
