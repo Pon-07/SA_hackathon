@@ -1,0 +1,490 @@
+{
+  "accuracy": 0.985,
+  "accuracy_percent": "98.5%",
+  "total_samples": 1000,
+  "training_samples": 800,
+  "test_samples": 200,
+  "classes": [
+    "Access/Account",
+    "Email",
+    "Hardware",
+    "Network",
+    "Printer",
+    "Security",
+    "Software"
+  ],
+  "classification_report": {
+    "Access/Account": {
+      "precision": 0.9565217391304348,
+      "recall": 0.9166666666666666,
+      "f1-score": 0.9361702127659575,
+      "support": 24.0
+    },
+    "Email": {
+      "precision": 1.0,
+      "recall": 0.9565217391304348,
+      "f1-score": 0.9777777777777777,
+      "support": 23.0
+    },
+    "Hardware": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 75.0
+    },
+    "Network": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 29.0
+    },
+    "Printer": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 11.0
+    },
+    "Security": {
+      "precision": 0.9375,
+      "recall": 1.0,
+      "f1-score": 0.967741935483871,
+      "support": 15.0
+    },
+    "Software": {
+      "precision": 0.9583333333333334,
+      "recall": 1.0,
+      "f1-score": 0.9787234042553191,
+      "support": 23.0
+    },
+    "accuracy": 0.985,
+    "macro avg": {
+      "precision": 0.978907867494824,
+      "recall": 0.9818840579710145,
+      "f1-score": 0.9800590471832751,
+      "support": 200.0
+    },
+    "weighted avg": {
+      "precision": 0.9853034420289855,
+      "recall": 0.985,
+      "f1-score": 0.9849187066270113,
+      "support": 200.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      22,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1
+    ],
+    [
+      1,
+      22,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      75,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      29,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      11,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      15,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      23
+    ]
+  ],
+  "top_features": {
+    "Access/Account": [
+      {
+        "term": "denied",
+        "weight": 1.394
+      },
+      {
+        "term": "page",
+        "weight": 1.384
+      },
+      {
+        "term": "access",
+        "weight": 1.383
+      },
+      {
+        "term": "locked",
+        "weight": 1.361
+      },
+      {
+        "term": "password",
+        "weight": 1.361
+      },
+      {
+        "term": "account",
+        "weight": 1.353
+      },
+      {
+        "term": "restricted",
+        "weight": 1.191
+      },
+      {
+        "term": "space",
+        "weight": 1.191
+      },
+      {
+        "term": "bitlocker",
+        "weight": 1.167
+      },
+      {
+        "term": "bitlocker recovery",
+        "weight": 1.167
+      },
+      {
+        "term": "recovery",
+        "weight": 1.167
+      },
+      {
+        "term": "distribution",
+        "weight": 1.166
+      }
+    ],
+    "Email": [
+      {
+        "term": "outlook",
+        "weight": 2.847
+      },
+      {
+        "term": "emails",
+        "weight": 2.188
+      },
+      {
+        "term": "mailbox",
+        "weight": 2.11
+      },
+      {
+        "term": "attachment",
+        "weight": 1.167
+      },
+      {
+        "term": "exchange",
+        "weight": 1.132
+      },
+      {
+        "term": "search",
+        "weight": 1.093
+      },
+      {
+        "term": "results",
+        "weight": 1.093
+      },
+      {
+        "term": "owa",
+        "weight": 1.086
+      },
+      {
+        "term": "email",
+        "weight": 1.034
+      },
+      {
+        "term": "microsoft",
+        "weight": 0.906
+      },
+      {
+        "term": "receive",
+        "weight": 0.874
+      },
+      {
+        "term": "bouncing",
+        "weight": 0.851
+      }
+    ],
+    "Hardware": [
+      {
+        "term": "monitor",
+        "weight": 1.232
+      },
+      {
+        "term": "screen",
+        "weight": 1.154
+      },
+      {
+        "term": "desk",
+        "weight": 0.905
+      },
+      {
+        "term": "workstation",
+        "weight": 0.871
+      },
+      {
+        "term": "display",
+        "weight": 0.834
+      },
+      {
+        "term": "failed",
+        "weight": 0.832
+      },
+      {
+        "term": "calls",
+        "weight": 0.726
+      },
+      {
+        "term": "headset",
+        "weight": 0.718
+      },
+      {
+        "term": "keyboard",
+        "weight": 0.716
+      },
+      {
+        "term": "mouse",
+        "weight": 0.7
+      },
+      {
+        "term": "api",
+        "weight": 0.677
+      },
+      {
+        "term": "battery",
+        "weight": 0.665
+      }
+    ],
+    "Network": [
+      {
+        "term": "vpn",
+        "weight": 1.813
+      },
+      {
+        "term": "network",
+        "weight": 1.493
+      },
+      {
+        "term": "ip",
+        "weight": 1.476
+      },
+      {
+        "term": "connection",
+        "weight": 1.359
+      },
+      {
+        "term": "port",
+        "weight": 1.302
+      },
+      {
+        "term": "nas",
+        "weight": 1.144
+      },
+      {
+        "term": "driver",
+        "weight": 1.071
+      },
+      {
+        "term": "tableau",
+        "weight": 1.067
+      },
+      {
+        "term": "snowflake",
+        "weight": 1.067
+      },
+      {
+        "term": "ip address",
+        "weight": 1.055
+      },
+      {
+        "term": "firewall",
+        "weight": 1.041
+      },
+      {
+        "term": "dns",
+        "weight": 1.032
+      }
+    ],
+    "Printer": [
+      {
+        "term": "printer",
+        "weight": 2.135
+      },
+      {
+        "term": "scanner",
+        "weight": 2.124
+      },
+      {
+        "term": "project",
+        "weight": 1.556
+      },
+      {
+        "term": "laser",
+        "weight": 1.251
+      },
+      {
+        "term": "badge",
+        "weight": 1.139
+      },
+      {
+        "term": "jira project",
+        "weight": 0.867
+      },
+      {
+        "term": "master",
+        "weight": 0.867
+      },
+      {
+        "term": "needs project",
+        "weight": 0.867
+      },
+      {
+        "term": "configure sprint",
+        "weight": 0.867
+      },
+      {
+        "term": "configure",
+        "weight": 0.867
+      },
+      {
+        "term": "admin permissions",
+        "weight": 0.867
+      },
+      {
+        "term": "boards",
+        "weight": 0.867
+      }
+    ],
+    "Security": [
+      {
+        "term": "security",
+        "weight": 2.526
+      },
+      {
+        "term": "iam",
+        "weight": 1.704
+      },
+      {
+        "term": "badge",
+        "weight": 1.576
+      },
+      {
+        "term": "yubikey",
+        "weight": 1.538
+      },
+      {
+        "term": "phishing",
+        "weight": 1.453
+      },
+      {
+        "term": "phishing email",
+        "weight": 1.453
+      },
+      {
+        "term": "aws",
+        "weight": 1.43
+      },
+      {
+        "term": "email",
+        "weight": 1.379
+      },
+      {
+        "term": "facing",
+        "weight": 1.276
+      },
+      {
+        "term": "rule",
+        "weight": 1.24
+      },
+      {
+        "term": "forwarding",
+        "weight": 1.24
+      },
+      {
+        "term": "policy",
+        "weight": 1.162
+      }
+    ],
+    "Software": [
+      {
+        "term": "memory",
+        "weight": 1.59
+      },
+      {
+        "term": "excel",
+        "weight": 1.327
+      },
+      {
+        "term": "extensions",
+        "weight": 1.259
+      },
+      {
+        "term": "code extensions",
+        "weight": 1.259
+      },
+      {
+        "term": "install",
+        "weight": 1.231
+      },
+      {
+        "term": "temporary",
+        "weight": 1.177
+      },
+      {
+        "term": "acrobat",
+        "weight": 1.154
+      },
+      {
+        "term": "adobe",
+        "weight": 1.154
+      },
+      {
+        "term": "adobe acrobat",
+        "weight": 1.154
+      },
+      {
+        "term": "crashes",
+        "weight": 1.132
+      },
+      {
+        "term": "merge",
+        "weight": 1.04
+      },
+      {
+        "term": "production",
+        "weight": 0.989
+      }
+    ]
+  }
+}
