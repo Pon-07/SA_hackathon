@@ -3,27 +3,27 @@ from typing import List, Dict, Any, Tuple
 
 DEFAULT_AGENTS: List[Dict[str, Any]] = [
     {
-        "name": "Agent_01",
+        "name": "Specialist_01",
         "skills": ["Network", "Security"],
         "load": 3
     },
     {
-        "name": "Agent_02",
+        "name": "Specialist_02",
         "skills": ["Hardware", "Printer"],
         "load": 5
     },
     {
-        "name": "Agent_03",
+        "name": "Specialist_03",
         "skills": ["Software", "Email"],
         "load": 2
     },
     {
-        "name": "Agent_04",
+        "name": "Specialist_04",
         "skills": ["Access/Account", "Security"],
         "load": 4
     },
     {
-        "name": "Agent_05",
+        "name": "Specialist_05",
         "skills": ["Network", "Software"],
         "load": 1
     }

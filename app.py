@@ -20,7 +20,6 @@ from categorization import (
 from auth import (
     authenticate,
     get_user_profile,
-    get_demo_presets,
     is_employee,
     is_agent,
     is_admin
@@ -643,7 +642,7 @@ def render_ai_decision_trail(ticket: dict) -> None:
     """
 
     # 4. Intelligent Routing
-    agent = ticket.get("assigned_agent", "Agent_01")
+    agent = ticket.get("assigned_agent", "Specialist_01")
     skills = ticket.get("agent_skills", [])
     prev_load = ticket.get("agent_previous_load", 0)
     new_load = ticket.get("agent_new_load", 1)
@@ -1072,8 +1071,8 @@ def process_new_complaint(
     subject: str,
     description: str,
     affected_users: int = 1,
-    creator_user: str = "emp_sarah",
-    creator_name: str = "Sarah Jenkins"
+    creator_user: str = "employee",
+    creator_name: str = "Employee"
 ) -> dict:
     """
     Execute full 7-stage automated pipeline:
@@ -1228,76 +1227,76 @@ def seed_demo_tickets_if_empty():
     if "demo_seeded" not in st.session_state or not st.session_state.get("session_tickets"):
         st.session_state["demo_seeded"] = True
         
-        # 1. Sarah Jenkins (emp_sarah) - Network Issue
+        # 1. Employee - Network Issue
         t1 = process_new_complaint(
             subject="VPN connection drops during git push to remote repository",
             description="When attempting to push large branches to our internal GitLab instance over the office VPN, the TLS handshake times out after 60 seconds. Multiple engineers in Pod B are affected.",
             affected_users=8,
-            creator_user="emp_sarah",
-            creator_name="Sarah Jenkins"
+            creator_user="employee",
+            creator_name="Employee"
         )
-        t1["assigned_agent"] = "Priya Sharma"
+        t1["assigned_agent"] = "Specialist_01"
         t1["status"] = "In Progress"
         t1["messages"] = [
             {
                 "sender_role": "employee",
-                "sender_name": "Sarah Jenkins",
+                "sender_name": "Employee",
                 "timestamp": (datetime.now() - timedelta(minutes=45)).strftime("%I:%M %p"),
-                "text": "Hi Priya, this is blocking our daily staging deployment. Could you check if Gateway-02 is dropping packets?"
+                "text": "This issue is blocking our daily staging deployment. Could you check if Gateway-02 is dropping packets?"
             },
             {
                 "sender_role": "agent",
-                "sender_name": "Priya Sharma",
+                "sender_name": "Specialist",
                 "timestamp": (datetime.now() - timedelta(minutes=30)).strftime("%I:%M %p"),
-                "text": "Checking the tunnel telemetry now, Sarah. Confirmed MTU mismatch on Gateway-02. Adjusting MSS clamp setting right away."
+                "text": "Checking the tunnel telemetry now. Confirmed MTU mismatch on Gateway-02. Adjusting MSS clamp setting right away."
             }
         ]
 
-        # 2. Alex Rivera (emp_alex) - Software Issue
+        # 2. Employee - Software Issue
         t2 = process_new_complaint(
             subject="Excel crashes on saving monthly marketing performance workbook",
             description="Whenever I click File -> Save on the Q3 Growth Analysis macro sheet, Excel crashes with an unexpected error. Need help recovering the file.",
             affected_users=1,
-            creator_user="emp_alex",
-            creator_name="Alex Rivera"
+            creator_user="employee",
+            creator_name="Employee"
         )
-        t2["assigned_agent"] = "Elena Rostova"
+        t2["assigned_agent"] = "Specialist_03"
         t2["status"] = "Open"
 
-        # 3. David Chen (emp_david) - Access Issue
+        # 3. Employee - Access Issue
         t3 = process_new_complaint(
             subject="Access denied to shared financial audit archive after password reset",
             description="My domain password was changed this morning and now I get 0x80070005 Access Denied when attempting to mount the shared network drive.",
             affected_users=2,
-            creator_user="emp_david",
-            creator_name="David Chen"
+            creator_user="employee",
+            creator_name="Employee"
         )
-        t3["assigned_agent"] = "Elena Rostova"
+        t3["assigned_agent"] = "Specialist_04"
         t3["status"] = "In Progress"
         t3["messages"] = [
             {
                 "sender_role": "employee",
-                "sender_name": "David Chen",
+                "sender_name": "Employee",
                 "timestamp": (datetime.now() - timedelta(minutes=15)).strftime("%I:%M %p"),
-                "text": "Hi Elena, finance team needs this folder before the 3 PM audit meeting."
+                "text": "The department needs this shared folder restored before the 3 PM audit meeting."
             },
             {
                 "sender_role": "agent",
-                "sender_name": "Elena Rostova",
+                "sender_name": "Specialist",
                 "timestamp": (datetime.now() - timedelta(minutes=10)).strftime("%I:%M %p"),
-                "text": "Refreshing your Kerberos TGT and security token groups right away, David."
+                "text": "Refreshing your Kerberos TGT and security token groups right away."
             }
         ]
 
-        # 4. Jordan Lee (employee) - Printer Issue
+        # 4. Employee - Printer Issue
         t4 = process_new_complaint(
             subject="Floor 4 office printer paper jam in tray 2 and offline",
             description="The office printer is displaying 13.00.00 paper jam error and print queue has 15 documents stuck.",
             affected_users=15,
             creator_user="employee",
-            creator_name="Jordan Lee"
+            creator_name="Employee"
         )
-        t4["assigned_agent"] = "Marcus Vance"
+        t4["assigned_agent"] = "Specialist_02"
         t4["status"] = "Open"
 
 
@@ -1323,114 +1322,33 @@ def render_login_screen():
     
     st.divider()
 
-    login_tab1, login_tab2 = st.tabs([
-        "⚡ Quick One-Click Demo Sign-In (Evaluator Presets)",
-        "🔐 Standard Credentials Sign-In"
-    ])
+    col_f_left, col_f_right = st.columns([1.1, 1.2])
+    with col_f_left:
+        st.markdown("<h4 style='color:#f8fafc; margin-bottom:12px;'>🔐 Account Credentials Sign-In</h4>", unsafe_allow_html=True)
+        with st.form("custom_login_form"):
+            input_user = st.text_input("Username / Role ID:", placeholder="e.g. employee, specialist, admin")
+            input_pass = st.text_input("Password:", type="password", placeholder="Enter your password")
+            login_submit = st.form_submit_button("Sign In to Portal", type="primary", use_container_width=True)
+            
+        if login_submit:
+            profile = authenticate(input_user, input_pass)
+            if profile:
+                st.session_state["current_user"] = profile
+                st.session_state["current_role"] = profile["role"]
+                st.toast(f"Welcome back, {profile['name']}!", icon="👋")
+                st.rerun()
+            else:
+                st.error("Invalid username or password. Please consult the Role Credentials directory.")
 
-    with login_tab1:
-        st.markdown("<p style='color:#cbd5e1; font-size:0.95rem; margin-bottom:16px;'>Select a pre-configured role profile to instantly test the platform with isolated permissions and sample active tickets:</p>", unsafe_allow_html=True)
-        
-        col_e1, col_e2, col_e3 = st.columns(3)
-        
-        with col_e1:
-            clean_markdown("""
-            <div class="landing-card landing-card-emp">
-                <div style="font-size: 2rem; margin-bottom: 8px;">👩‍💻</div>
-                <h3 style="color: #60a5fa; margin: 0 0 4px 0; font-size: 1.25rem;">Sarah Jenkins</h3>
-                <div style="color: #94a3b8; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px;">EMPLOYEE (Engineering Dept)</div>
-                <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 16px;">
-                    File complaints, inspect personalized SLA timers, view safe AI triage explanations, and chat with assigned technician.
-                </p>
-                <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:6px; font-size:0.8rem; color:#94a3b8; margin-bottom:16px;">
-                    Username: <code style="color:#60a5fa;">emp_sarah</code>
-                </div>
-            </div>
-            """)
-            st.write("")
-            if st.button("🚀 Sign In as Sarah (Employee)", use_container_width=True, type="primary", key="quick_emp_sarah"):
-                user = authenticate("emp_sarah", "password123")
-                if user:
-                    st.session_state["current_user"] = user
-                    st.session_state["current_role"] = user["role"]
-                    st.rerun()
-
-        with col_e2:
-            clean_markdown("""
-            <div class="landing-card landing-card-ops">
-                <div style="font-size: 2rem; margin-bottom: 8px;">🛡️</div>
-                <h3 style="color: #c084fc; margin: 0 0 4px 0; font-size: 1.25rem;">Priya Sharma</h3>
-                <div style="color: #94a3b8; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px;">IT SPECIALIST (Network/Security)</div>
-                <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 16px;">
-                    Review assigned network/security tickets, examine 7-stage AI decision trail, converse with employees, and resolve incidents.
-                </p>
-                <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:6px; font-size:0.8rem; color:#94a3b8; margin-bottom:16px;">
-                    Username: <code style="color:#c084fc;">agent_priya</code>
-                </div>
-            </div>
-            """)
-            st.write("")
-            if st.button("🔧 Sign In as Priya (IT Specialist)", use_container_width=True, type="secondary", key="quick_agent_priya"):
-                user = authenticate("agent_priya", "password123")
-                if user:
-                    st.session_state["current_user"] = user
-                    st.session_state["current_role"] = user["role"]
-                    st.rerun()
-
-        with col_e3:
-            clean_markdown("""
-            <div class="landing-card" style="border-top: 4px solid #ec4899;">
-                <div style="font-size: 2rem; margin-bottom: 8px;">👑</div>
-                <h3 style="color: #f472b6; margin: 0 0 4px 0; font-size: 1.25rem;">Alex Mercer</h3>
-                <div style="color: #94a3b8; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px;">OPERATIONS ADMIN (Director)</div>
-                <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.5; margin-bottom: 16px;">
-                    Global SLA governance, live escalation center, technician workload rebalancing, and Explainable AI transparency hub.
-                </p>
-                <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:6px; font-size:0.8rem; color:#94a3b8; margin-bottom:16px;">
-                    Username: <code style="color:#f472b6;">admin</code>
-                </div>
-            </div>
-            """)
-            st.write("")
-            if st.button("🛡️ Sign In as Operations Admin", use_container_width=True, type="secondary", key="quick_admin"):
-                user = authenticate("admin", "admin123")
-                if user:
-                    st.session_state["current_user"] = user
-                    st.session_state["current_role"] = user["role"]
-                    st.rerun()
-
-    with login_tab2:
-        col_f_left, col_f_right = st.columns([1.1, 1.2])
-        with col_f_left:
-            st.markdown("<h4 style='color:#f8fafc; margin-bottom:12px;'>Enter Account Credentials</h4>", unsafe_allow_html=True)
-            with st.form("custom_login_form"):
-                input_user = st.text_input("Username / Account ID:", placeholder="e.g. emp_sarah, agent_priya, admin")
-                input_pass = st.text_input("Password:", type="password", placeholder="Enter your password")
-                login_submit = st.form_submit_button("Sign In to Portal", type="primary", use_container_width=True)
-                
-            if login_submit:
-                profile = authenticate(input_user, input_pass)
-                if profile:
-                    st.session_state["current_user"] = profile
-                    st.session_state["current_role"] = profile["role"]
-                    st.toast(f"Welcome back, {profile['name']}!", icon="👋")
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password. Please consult the system user directory.")
-
-        with col_f_right:
-            st.markdown("<h4 style='color:#f8fafc; margin-bottom:12px;'>System User Directory</h4>", unsafe_allow_html=True)
-            demo_headers = ["Username", "Password", "User Name", "Assigned Role"]
-            demo_rows = [
-                ["<code>emp_sarah</code>", "<code>password123</code>", "Sarah Jenkins", "<span class='badge badge-blue'>Employee</span>"],
-                ["<code>emp_alex</code>", "<code>password123</code>", "Alex Rivera", "<span class='badge badge-blue'>Employee</span>"],
-                ["<code>emp_david</code>", "<code>password123</code>", "David Chen", "<span class='badge badge-blue'>Employee</span>"],
-                ["<code>agent_priya</code>", "<code>password123</code>", "Priya Sharma", "<span class='badge badge-purple'>IT Specialist</span>"],
-                ["<code>agent_marcus</code>", "<code>password123</code>", "Marcus Vance", "<span class='badge badge-purple'>IT Specialist</span>"],
-                ["<code>agent_elena</code>", "<code>password123</code>", "Elena Rostova", "<span class='badge badge-purple'>IT Specialist</span>"],
-                ["<code>admin</code>", "<code>admin123</code>", "Alex Mercer", "<span class='badge badge-red'>Operations Admin</span>"]
-            ]
-            render_custom_table(demo_headers, demo_rows)
+    with col_f_right:
+        st.markdown("<h4 style='color:#f8fafc; margin-bottom:12px;'>📋 Role Credentials Directory</h4>", unsafe_allow_html=True)
+        demo_headers = ["Role", "Username", "Password", "Capabilities & Scope"]
+        demo_rows = [
+            ["<span class='badge badge-blue'>Employee</span>", "<code>employee</code>", "<code>password123</code>", "Submit complaints, view SLA countdown, status chat"],
+            ["<span class='badge badge-purple'>Specialist</span>", "<code>specialist</code>", "<code>password123</code>", "Queue triage, ticket resolution, 7-stage AI decision trail"],
+            ["<span class='badge badge-red'>Operations Admin</span>", "<code>admin</code>", "<code>admin123</code>", "Global SLA governance, escalations, workload balance & XAI Hub"]
+        ]
+        render_custom_table(demo_headers, demo_rows)
 
     st.write("")
     st.divider()
@@ -1447,11 +1365,11 @@ def render_login_screen():
 def render_employee_dashboard():
     current_user = st.session_state.get("current_user")
     if not current_user:
-        current_user = get_user_profile("emp_sarah")
+        current_user = get_user_profile("employee")
         st.session_state["current_user"] = current_user
 
-    user_id = current_user.get("username", "emp_sarah")
-    user_name = current_user.get("name", "Sarah Jenkins")
+    user_id = current_user.get("username", "employee")
+    user_name = current_user.get("name", "Employee")
 
     # Sidebar
     with st.sidebar:
