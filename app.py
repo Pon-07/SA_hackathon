@@ -5,12 +5,15 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 import io
+import textwrap
 
 # Import Core Pipeline Modules
 from categorization import (
     CATEGORY_KEYWORDS,
     categorize,
-    explain_category
+    explain_category,
+    find_matched_keywords,
+    format_keyword_name
 )
 from prioritization import (
     prioritize,
@@ -52,7 +55,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
+# Helper function to render HTML cleanly without Markdown 4-space indentation code-block traps
+def clean_markdown(html_str: str) -> None:
+    cleaned = "\n".join(line.strip() for line in html_str.split("\n") if line.strip())
+    st.markdown(cleaned, unsafe_allow_html=True)
+
+# Helper function to render styled HTML tables without markdown formatting glitches
+def render_custom_table(headers: list, rows: list) -> None:
+    header_html = "".join([f'<th style="padding: 10px 12px; color: #94a3b8; font-weight: 600; text-align: left;">{h}</th>' for h in headers])
+    body_html = ""
+    for r in rows:
+        cells_html = "".join([f'<td style="padding: 10px 12px; border-bottom: 1px solid rgba(51, 65, 85, 0.4);">{cell}</td>' for cell in r])
+        body_html += f'<tr style="color: #f1f5f9;">{cells_html}</tr>'
+    
+    table_html = f'<div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 8px; margin-bottom: 16px;"><table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;"><thead><tr style="border-bottom: 1px solid rgba(71, 85, 105, 0.6);">{header_html}</tr></thead><tbody>{body_html}</tbody></table></div>'
+    st.markdown(table_html, unsafe_allow_html=True)
+
+clean_markdown("""
 <style>
     /* Global Typography & SaaS Theme */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -137,37 +156,50 @@ st.markdown("""
     .badge-slate { background: rgba(100, 116, 139, 0.15); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.4); }
     
     /* Chat Conversation Styling */
+    .chat-header-card {
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(51, 65, 85, 0.7);
+        border-radius: 12px 12px 0 0;
+        padding: 14px 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    }
     .chat-container {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        padding: 16px;
+        padding: 18px;
         background: rgba(15, 23, 42, 0.65);
-        border-radius: 12px;
+        border-radius: 0 0 12px 12px;
         border: 1px solid rgba(51, 65, 85, 0.6);
+        border-top: none;
         margin-bottom: 16px;
         max-height: 440px;
         overflow-y: auto;
     }
     .chat-msg-emp {
         align-self: flex-end;
-        max-width: 80%;
+        max-width: 78%;
         background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
         color: #ffffff;
-        padding: 10px 16px;
+        padding: 11px 16px;
         border-radius: 16px 16px 2px 16px;
         box-shadow: 0 2px 10px rgba(37, 99, 235, 0.25);
         font-size: 0.92rem;
+        line-height: 1.45;
     }
     .chat-msg-agent {
         align-self: flex-start;
-        max-width: 80%;
+        max-width: 78%;
         background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
         color: #ffffff;
-        padding: 10px 16px;
+        padding: 11px 16px;
         border-radius: 16px 16px 16px 2px;
         box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
         font-size: 0.92rem;
+        line-height: 1.45;
     }
     .chat-msg-sys {
         align-self: center;
@@ -175,10 +207,11 @@ st.markdown("""
         background: rgba(30, 41, 59, 0.85);
         border: 1px solid rgba(71, 85, 105, 0.5);
         color: #cbd5e1;
-        padding: 6px 16px;
+        padding: 7px 18px;
         border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         text-align: center;
+        margin: 4px 0;
     }
     .chat-meta {
         font-size: 0.72rem;
@@ -187,7 +220,7 @@ st.markdown("""
         display: block;
     }
 
-    /* AI Decision Trail Card */
+    /* AI Decision Trail Card & Detailed Workflow Styling */
     .trail-step {
         background: rgba(30, 41, 59, 0.65);
         border: 1px solid rgba(51, 65, 85, 0.65);
@@ -208,6 +241,93 @@ st.markdown("""
         font-size: 0.72rem;
         font-weight: 700;
         margin-right: 8px;
+    }
+    .decision-card {
+        background: rgba(30, 41, 59, 0.85);
+        border: 1px solid rgba(51, 65, 85, 0.75);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 6px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+    }
+    .decision-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+    }
+    .decision-step-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .decision-step-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        background: #3b82f6;
+        color: #ffffff;
+        border-radius: 50%;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+    .decision-section {
+        margin-bottom: 10px;
+        font-size: 0.88rem;
+        line-height: 1.5;
+    }
+    .decision-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #94a3b8;
+        margin-bottom: 3px;
+        display: inline-block;
+    }
+    .decision-why {
+        color: #cbd5e1;
+        font-size: 0.88rem;
+        background: rgba(15, 23, 42, 0.5);
+        padding: 8px 12px;
+        border-radius: 6px;
+        border-left: 3px solid #3b82f6;
+        margin-top: 3px;
+    }
+    .connector-arrow {
+        text-align: center;
+        color: #60a5fa;
+        font-size: 1.2rem;
+        margin: 2px 0 6px 0;
+        opacity: 0.8;
+    }
+    .kw-chip {
+        display: inline-block;
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #93c5fd;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-family: monospace;
+        margin: 2px 4px 2px 0;
+    }
+    .factor-item {
+        display: inline-block;
+        background: rgba(51, 65, 85, 0.5);
+        border: 1px solid rgba(71, 85, 105, 0.5);
+        color: #cbd5e1;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        margin: 3px 6px 3px 0;
     }
     
     /* Role Header Badges */
@@ -271,7 +391,7 @@ st.markdown("""
         border-top: 4px solid #8b5cf6;
     }
 </style>
-""", unsafe_allow_html=True)
+""")
 
 DATASET_PATH = Path(__file__).parent / "tickets.csv"
 
@@ -374,7 +494,7 @@ def get_escalation_badge(esc_level: str) -> str:
     return f'<span class="badge badge-green">{esc_level}</span>'
 
 def render_sidebar_status():
-    st.markdown("""
+    clean_markdown("""
     <div class="sys-status-widget">
         <strong style="color: #f1f5f9; letter-spacing: 0.5px; font-size: 0.75rem;">SYSTEM STATUS</strong><br>
         <span class="sys-dot-green">●</span> AI Triage Engine: <span style="color:#34d399;">Online</span><br>
@@ -382,7 +502,470 @@ def render_sidebar_status():
         <span class="sys-dot-green">●</span> Routing Engine: <span style="color:#34d399;">Online</span><br>
         <span class="sys-dot-green">●</span> Knowledge Base: <span style="color:#60a5fa;">1,000 Tickets</span>
     </div>
-    """, unsafe_allow_html=True)
+    """)
+
+# -------------------------------------------------------------
+# Explainable AI Renderers (IT Operations Center & Employee Portal)
+# -------------------------------------------------------------
+def render_ai_decision_trail(ticket: dict) -> None:
+    """
+    Render transparent, step-by-step 7-stage Explainable AI decision trail.
+    Structure per step: DECISION + WHY + EVIDENCE / FACTORS
+    """
+    # 1. Category Detection
+    cat = ticket.get("category", "General")
+    kws = ticket.get("category_keywords", [])
+    cat_why = ticket.get("category_why", "Matched keywords from subject and description.")
+    if kws:
+        kw_html = "".join([f'<span class="kw-chip">{kw}</span>' for kw in kws])
+        cat_evidence = f'<div style="margin-top:6px;"><span class="decision-label">Matched Keywords:</span><br>{kw_html}</div>'
+    else:
+        cat_evidence = '<div style="margin-top:6px; color:#94a3b8; font-size:0.84rem;"><em>No specific domain keywords matched in text. Applied fallback category classification.</em></div>'
+
+    # 2. Priority Assessment
+    pri = ticket.get("priority", "Medium")
+    pri_score = ticket.get("priority_score", 0)
+    pri_reasons = ticket.get("priority_reasons", [])
+    pri_why = ticket.get("priority_why", "Determined by combined urgency signals, impact scale, and affected user count.")
+    if pri_reasons:
+        reasons_html = "".join([f'<span class="factor-item">{r}</span>' for r in pri_reasons])
+        pri_evidence = f'<div style="margin-top:6px;"><span class="decision-label">Decision Factors & Signals (Score: {pri_score} pts):</span><br>{reasons_html}</div>'
+    else:
+        pri_evidence = f'<div style="margin-top:6px; color:#94a3b8; font-size:0.84rem;">Score: {pri_score} points (Calculated by prioritization engine)</div>'
+
+    # 3. SLA Assignment
+    resp_h = ticket.get("response_sla_hours", 4)
+    res_h = ticket.get("resolution_sla_hours", 24)
+    res_dead = ticket.get("resolution_deadline")
+    dead_str = res_dead.strftime('%d %b %Y, %I:%M %p') if isinstance(res_dead, datetime) else str(res_dead)
+    sla_why = f"{pri} priority follows the {pri} SLA policy ({resp_h}h response / {res_h}h resolution target)."
+    sla_evidence = f"""
+    <div style="margin-top:6px;">
+        <span class="decision-label">SLA Policy Pipeline:</span><br>
+        <div style="background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:6px; font-size:0.85rem; color:#cbd5e1;">
+            <strong style="color:#60a5fa;">{pri} Priority</strong> → <strong style="color:#38bdf8;">{resp_h}h Response / {res_h}h Resolution</strong> → <strong style="color:#34d399;">Target Deadline: {dead_str}</strong>
+        </div>
+    </div>
+    """
+
+    # 4. Intelligent Routing
+    agent = ticket.get("assigned_agent", "Agent_01")
+    skills = ticket.get("agent_skills", [])
+    prev_load = ticket.get("agent_previous_load", 0)
+    new_load = ticket.get("agent_new_load", 1)
+    is_skill = ticket.get("is_skill_matched", True)
+    skills_str = ", ".join(skills) if skills else "General IT"
+    
+    if is_skill:
+        routing_why = f"Assigned to eligible specialist {agent} with verified {cat} competency and lowest active workload ({prev_load} tickets)."
+    else:
+        routing_why = f"No direct skill match for {cat}; routed to least-loaded available technician {agent} ({prev_load} tickets)."
+
+    routing_evidence = f"""
+    <div style="margin-top:6px;">
+        <span class="decision-label">Workload & Skill Verification:</span><br>
+        <span class="factor-item">🎯 Skill Match: <strong>{cat}</strong> {'✓ Verified' if is_skill else '(Fallback)'}</span>
+        <span class="factor-item">🛠️ Agent Competencies: {skills_str}</span>
+        <span class="factor-item">📊 Queue Workload: {prev_load} active tickets (Updated to {new_load})</span>
+    </div>
+    """
+
+    # 5. Breach Risk Assessment
+    risk_pct = ticket.get("risk_percentage", 10)
+    risk_lvl = ticket.get("risk_level", "LOW")
+    risk_reasons = ticket.get("risk_reasons", [])
+    risk_border = "#ef4444" if risk_lvl in ["CRITICAL", "HIGH"] else "#f59e0b" if risk_lvl == "MEDIUM" else "#10b981"
+    risk_why = ticket.get("risk_why")
+    if not risk_why:
+        if risk_lvl in ["CRITICAL", "HIGH"]:
+            risk_why = "Risk is elevated because the ticket has high operational impact, tight SLA resolution window, or heavy agent load."
+        elif risk_lvl == "MEDIUM":
+            risk_why = "Moderate risk detected due to standard priority timeline and active queue commitments."
+        else:
+            risk_why = "Risk is low because the ticket has sufficient SLA buffer and manageable technician queue load."
+
+    if risk_reasons:
+        risk_reasons_html = "".join([f'<span class="factor-item">{r}</span>' for r in risk_reasons])
+        risk_evidence = f'<div style="margin-top:6px;"><span class="decision-label">Multi-Factor Risk Breakdown:</span><br>{risk_reasons_html}</div>'
+    else:
+        risk_evidence = '<div style="margin-top:6px; color:#94a3b8; font-size:0.84rem;">Computed by predictive breach risk engine based on priority, queue depth, and remaining SLA.</div>'
+
+    # 6. Historical Similarity
+    top_sim = ticket.get("top_similar")
+    if not top_sim and ticket.get("similar_records"):
+        top_sim = ticket["similar_records"][0]
+        
+    if top_sim:
+        sim_id = top_sim.get("ticket_id", "TKT-0000")
+        sim_sub = top_sim.get("subject", "Historical Support Record")
+        sim_cat = top_sim.get("category", "General")
+        sim_pct = top_sim.get("similarity_percentage", "0%")
+        sim_res = top_sim.get("resolution_notes", "Resolution notes recorded in historical archive.")
+        
+        sim_why = "TF-IDF similarity identified this historical ticket as the closest match based on the subject and description."
+        sim_evidence = f"""
+        <div style="margin-top:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span class="decision-label">Closest Historical Match:</span>
+                <span class="badge badge-purple" style="font-size:0.7rem;">HISTORICAL REFERENCE</span>
+            </div>
+            <div style="background:rgba(15,23,42,0.65); border:1px solid rgba(51,65,85,0.6); padding:10px 14px; border-radius:8px; font-size:0.86rem; color:#cbd5e1;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <strong style="color:#60a5fa;">{sim_sub}</strong>
+                    <span style="color:#94a3b8; font-family:monospace;">{sim_id} ({sim_cat})</span>
+                </div>
+                <div style="color:#38bdf8; font-weight:600; font-size:0.82rem; margin-bottom:6px;">TF-IDF Cosine Similarity: {sim_pct}</div>
+                <div style="color:#cbd5e1; border-top:1px solid rgba(71,85,105,0.4); padding-top:6px; font-size:0.83rem;">
+                    <strong style="color:#34d399;">Verified Resolution:</strong> {sim_res}
+                </div>
+            </div>
+        </div>
+        """
+    else:
+        sim_why = "Query text matched against 1,000 historical repository records via TF-IDF vectorizer."
+        sim_evidence = '<div style="margin-top:6px; color:#94a3b8; font-size:0.84rem;">No matching historical record met similarity threshold.</div>'
+
+    # 7. Escalation Decision
+    esc_lvl = ticket.get("escalation_level", "NO ESCALATION")
+    esc_status = ticket.get("escalation_status", "NO ESCALATION")
+    esc_action = ticket.get("escalation_action", "No escalation required. Ticket is currently on track.")
+    esc_reasons = ticket.get("escalation_reasons", [])
+    sim_action = ticket.get("simulated_action", "")
+    esc_border = "#ef4444" if "CRITICAL" in esc_lvl else "#f59e0b" if "WARNING" in esc_lvl or "REQUIRED" in esc_lvl else "#10b981"
+    
+    if "CRITICAL" in esc_lvl:
+        esc_why = "Critical escalation triggered due to imminent SLA breach threshold, critical business impact, or high queue risk."
+    elif "WARNING" in esc_lvl or "REQUIRED" in esc_lvl:
+        esc_why = "Warning escalation active: elevated breach risk or tight remaining SLA window requires supervisor awareness."
+    else:
+        esc_why = "No escalation triggered. SLA buffer is healthy and incident is within standard operating parameters."
+
+    if esc_reasons:
+        esc_reasons_html = "".join([f'<span class="factor-item">{r}</span>' for r in esc_reasons])
+        esc_factors_html = f'<div style="margin-top:6px;"><span class="decision-label">Triggered Conditions:</span><br>{esc_reasons_html}</div>'
+    else:
+        esc_factors_html = ""
+
+    sim_act_html = f'<div style="margin-top:6px; font-size:0.82rem; color:#94a3b8; font-style:italic;">{sim_action}</div>' if sim_action else ''
+
+    trail_html = f"""
+    <div style="margin-top: 10px; margin-bottom: 20px;">
+        <!-- STEP 1: CATEGORY DETECTION -->
+        <div class="decision-card" style="border-left: 4px solid #3b82f6;">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:#3b82f6;">1</span>
+                    CATEGORY DETECTION
+                </div>
+                <div><span class="badge badge-blue">{cat}</span></div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="color:#60a5fa; font-weight:700; font-size:1.02rem;">✓ Category: {cat}</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:#3b82f6;">{cat_why}</div>
+            </div>
+            <div class="decision-section">
+                {cat_evidence}
+            </div>
+        </div>
+
+        <div class="connector-arrow">↓</div>
+
+        <!-- STEP 2: PRIORITY ASSESSMENT -->
+        <div class="decision-card" style="border-left: 4px solid #f59e0b;">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:#f59e0b;">2</span>
+                    PRIORITY ASSESSMENT
+                </div>
+                <div>{get_priority_badge(pri)}</div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="font-weight:700; font-size:1.02rem;">✓ Priority: {get_priority_badge(pri)}</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:#f59e0b;">{pri_why}</div>
+            </div>
+            <div class="decision-section">
+                {pri_evidence}
+            </div>
+        </div>
+
+        <div class="connector-arrow">↓</div>
+
+        <!-- STEP 3: SLA ASSIGNMENT -->
+        <div class="decision-card" style="border-left: 4px solid #06b6d4;">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:#06b6d4;">3</span>
+                    SLA ASSIGNMENT
+                </div>
+                <div><span class="badge badge-cyan">{resp_h}h / {res_h}h SLA</span></div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="color:#22d3ee; font-weight:700; font-size:1.02rem;">✓ Response SLA: {resp_h}h &nbsp;|&nbsp; Resolution SLA: {res_h}h</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:#06b6d4;">{sla_why}</div>
+            </div>
+            <div class="decision-section">
+                {sla_evidence}
+            </div>
+        </div>
+
+        <div class="connector-arrow">↓</div>
+
+        <!-- STEP 4: INTELLIGENT ROUTING -->
+        <div class="decision-card" style="border-left: 4px solid #8b5cf6;">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:#8b5cf6;">4</span>
+                    INTELLIGENT ROUTING
+                </div>
+                <div><span class="badge badge-purple">{agent}</span></div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="color:#c084fc; font-weight:700; font-size:1.02rem;">✓ Assigned Agent: {agent}</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:#8b5cf6;">{routing_why}</div>
+            </div>
+            <div class="decision-section">
+                {routing_evidence}
+            </div>
+        </div>
+
+        <div class="connector-arrow">↓</div>
+
+        <!-- STEP 5: BREACH RISK ASSESSMENT -->
+        <div class="decision-card" style="border-left: 4px solid {risk_border};">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:{risk_border};">5</span>
+                    BREACH RISK ASSESSMENT
+                </div>
+                <div>{get_risk_badge(risk_lvl)}</div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="font-weight:700; font-size:1.02rem;">✓ Breach Risk: {get_risk_badge(risk_lvl)} ({risk_pct}%)</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:{risk_border};">{risk_why}</div>
+            </div>
+            <div class="decision-section">
+                {risk_evidence}
+            </div>
+        </div>
+
+        <div class="connector-arrow">↓</div>
+
+        <!-- STEP 6: HISTORICAL KNOWLEDGE MATCH -->
+        <div class="decision-card" style="border-left: 4px solid #14b8a6;">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:#14b8a6;">6</span>
+                    HISTORICAL KNOWLEDGE MATCH
+                </div>
+                <div><span class="badge badge-slate">TF-IDF Vector Match</span></div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="color:#2dd4bf; font-weight:700; font-size:1.02rem;">✓ Closest Reference Ticket Identified</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:#14b8a6;">{sim_why}</div>
+            </div>
+            <div class="decision-section">
+                {sim_evidence}
+            </div>
+        </div>
+
+        <div class="connector-arrow">↓</div>
+
+        <!-- STEP 7: ESCALATION DECISION -->
+        <div class="decision-card" style="border-left: 4px solid {esc_border};">
+            <div class="decision-header">
+                <div class="decision-step-title">
+                    <span class="decision-step-num" style="background:{esc_border};">7</span>
+                    ESCALATION DECISION
+                </div>
+                <div>{get_escalation_badge(esc_lvl)}</div>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Decision:</span><br>
+                <span style="font-weight:700; font-size:1.02rem;">✓ Level: {get_escalation_badge(esc_lvl)}</span>
+            </div>
+            <div class="decision-section">
+                <span class="decision-label">Why:</span>
+                <div class="decision-why" style="border-left-color:{esc_border};">{esc_why}</div>
+            </div>
+            <div class="decision-section">
+                {esc_factors_html}
+                <div style="margin-top:8px;">
+                    <span class="decision-label">Recommended Action:</span><br>
+                    <div style="background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:6px; font-size:0.88rem; color:#f8fafc; font-weight:600;">
+                        👉 {esc_action}
+                    </div>
+                    {sim_act_html}
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+    clean_markdown(trail_html)
+
+
+def render_employee_ai_summary(ticket: dict) -> None:
+    """
+    Render safe, simplified explanation for employees without exposing internal operational mechanics.
+    """
+    cat = ticket.get("category", "General")
+    pri = ticket.get("priority", "Medium")
+    agent = ticket.get("assigned_agent", "IT Specialist")
+    res_h = ticket.get("resolution_sla_hours", 24)
+    kws = ticket.get("category_keywords", [])
+    
+    kws_note = f" (detected keywords: {', '.join(kws)})" if kws else ""
+
+    clean_markdown(f"""
+    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 10px; padding: 16px; margin-top: 10px;">
+        <div style="font-size: 0.95rem; font-weight: 700; color: #60a5fa; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+            <span>🤖</span> Automated AI Triage & Resolution Policy
+        </div>
+        <ul style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.8; margin: 0; padding-left: 20px;">
+            <li><strong>Category Detection:</strong> AI categorized your complaint as <span style="color:#60a5fa; font-weight:600;">{cat}</span>{kws_note}.</li>
+            <li><strong>Priority Assessment:</strong> Priority was assigned as <span style="font-weight:600;">{pri}</span> based on urgency and user impact analysis.</li>
+            <li><strong>Specialist Assignment:</strong> Your ticket has been assigned to an IT specialist (<strong style="color:#c084fc;">{agent}</strong>) with matching domain expertise.</li>
+            <li><strong>SLA Target:</strong> Your target resolution time is <strong style="color:#34d399;">{res_h} hours</strong> in accordance with our IT Service Level Policy.</li>
+        </ul>
+    </div>
+    """)
+
+
+def render_ticket_chat(ticket: dict, viewer_role: str) -> None:
+    """
+    Render live ticket-specific communication channel between Employee and IT Agent.
+    - Isolated per ticket ID.
+    - Employee messages on right, Agent messages on left, System updates centered.
+    - Real-time message submission with toasts and status preservation.
+    """
+    is_resolved = (ticket["status"] == "Resolved")
+    
+    # 1. Chat Header Card
+    clean_markdown(f"""
+    <div class="chat-header-card">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">💬</span>
+            <div>
+                <strong style="color: #f8fafc; font-size: 1.02rem;">IT Support Conversation</strong><br>
+                <span style="color: #94a3b8; font-size: 0.82rem;">Ticket: <code>{ticket['ticket_id']}</code> &nbsp;|&nbsp; Assigned: <strong style="color:#c084fc;">{ticket['assigned_agent']}</strong></span>
+            </div>
+        </div>
+        <div>
+            {get_status_badge(ticket['status'])}
+        </div>
+    </div>
+    """)
+
+    # 2. Conversation Messages Container
+    messages = ticket.get("messages", [])
+    chat_html = '<div class="chat-container">'
+    if not messages:
+        chat_html += """
+        <div style="text-align:center; padding:32px 16px; color:#94a3b8;">
+            <div style="font-size:1.9rem; margin-bottom:8px;">💬</div>
+            <strong style="color:#cbd5e1; font-size:1.02rem;">No messages yet.</strong><br>
+            <span style="font-size:0.86rem; color:#94a3b8;">Start a conversation with IT Support.</span>
+        </div>
+        """
+    else:
+        for msg in messages:
+            sender = msg.get("sender", "System")
+            ts_obj = msg.get("timestamp")
+            if isinstance(ts_obj, datetime):
+                ts = ts_obj.strftime("%I:%M %p")
+            elif isinstance(ts_obj, str):
+                ts = ts_obj
+            else:
+                ts = datetime.now().strftime("%I:%M %p")
+            text_body = msg.get("message", "")
+            
+            if sender == "Employee":
+                sender_label = "You (Employee)" if viewer_role == "employee" else "Employee"
+                chat_html += f"""
+                <div class="chat-msg-emp">
+                    <div>{text_body}</div>
+                    <span class="chat-meta">{sender_label} • {ts}</span>
+                </div>
+                """
+            elif sender == "IT Agent":
+                sender_label = f"IT Agent ({ticket['assigned_agent']})" if viewer_role == "employee" else f"You ({ticket['assigned_agent']})"
+                chat_html += f"""
+                <div class="chat-msg-agent">
+                    <div>{text_body}</div>
+                    <span class="chat-meta">{sender_label} • {ts}</span>
+                </div>
+                """
+            else:
+                chat_html += f"""
+                <div class="chat-msg-sys">
+                    ℹ️ {text_body} • <span style="opacity:0.75;">{ts}</span>
+                </div>
+                """
+    chat_html += '</div>'
+    clean_markdown(chat_html)
+
+    # 3. Input Form or Resolution State Banner
+    if is_resolved:
+        clean_markdown("""
+        <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 12px 16px; text-align: center; color: #34d399; font-size: 0.88rem; margin-bottom: 15px;">
+            ✓ <strong>Ticket Resolved</strong> — Conversation closed for new messages. All previous discussion records remain saved above.
+        </div>
+        """)
+    else:
+        if viewer_role == "employee":
+            with st.form(f"emp_chat_form_{ticket['ticket_id']}"):
+                emp_msg_input = st.text_input("Type your message...", placeholder="Type your message to IT Support...", key=f"emp_input_{ticket['ticket_id']}")
+                send_btn = st.form_submit_button("📨 Send Message", type="primary", use_container_width=True)
+            
+            if send_btn and emp_msg_input.strip():
+                if "messages" not in ticket:
+                    ticket["messages"] = []
+                ticket["messages"].append({
+                    "sender": "Employee",
+                    "message": emp_msg_input.strip(),
+                    "timestamp": datetime.now()
+                })
+                st.toast("Message sent to IT Agent.", icon="📨")
+                st.rerun()
+        else:
+            with st.form(f"agent_chat_form_{ticket['ticket_id']}"):
+                agent_reply_input = st.text_input("Reply to Employee:", placeholder="Type support response or update to employee...", key=f"agent_input_{ticket['ticket_id']}")
+                send_reply_btn = st.form_submit_button("📨 Send Reply", type="primary", use_container_width=True)
+            
+            if send_reply_btn and agent_reply_input.strip():
+                if "messages" not in ticket:
+                    ticket["messages"] = []
+                ticket["messages"].append({
+                    "sender": "IT Agent",
+                    "message": agent_reply_input.strip(),
+                    "timestamp": datetime.now()
+                })
+                st.toast("Reply sent to employee.", icon="📨")
+                st.rerun()
+
 
 # -------------------------------------------------------------
 # Helper: End-to-End Automated Pipeline Execution
@@ -407,11 +990,23 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
     # 1. Categorization
     pred_category = categorize(ticket_text)
     cat_exp = explain_category(ticket_text)
+    matched_kws_raw = find_matched_keywords(ticket_text).get(pred_category, [])
+    category_keywords = [format_keyword_name(k) for k in matched_kws_raw]
+    category_why = "Matched keywords from subject/description." if category_keywords else "No domain keywords detected in text; assigned fallback general category."
     
     # 2. Prioritization
+    priority_score, priority_reasons = calculate_priority_score(ticket_text, pred_category, affected_users)
     pred_priority = prioritize(ticket_text, pred_category, affected_users)
     pri_exp = explain_priority(ticket_text, pred_category, affected_users)
-    
+    if pred_priority == "Critical":
+        priority_why = "High urgency signals + major organizational impact + multi-user scale."
+    elif pred_priority == "High":
+        priority_why = "Elevated urgency or significant operational impact detected."
+    elif pred_priority == "Medium":
+        priority_why = "Standard business urgency and moderate operational impact."
+    else:
+        priority_why = "Standard routine request with low urgency and single-user scope."
+        
     # 3. SLA Deadlines
     sla_info = calculate_sla(created_time, pred_priority)
     sla_status, time_display, remaining_hours = get_sla_status(
@@ -419,6 +1014,7 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
         current_time=created_time
     )
     sla_exp = explain_sla(pred_priority)
+    sla_policy = f"{pred_priority} priority follows the {pred_priority} SLA policy ({sla_info['response_sla_hours']}h response / {sla_info['resolution_sla_hours']}h resolution)."
     
     # 4. Intelligent Routing
     assignment_info = assign_ticket(pred_category, st.session_state["agent_pool"])
@@ -431,7 +1027,11 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
         remaining_hours=remaining_hours,
         historical_breach_rate=historical_breach_rate
     )
-    
+    if risk_info["risk_level"] in ["CRITICAL", "HIGH"]:
+        risk_why = "Risk is elevated because the ticket has high operational impact and limited SLA time."
+    else:
+        risk_why = "Risk is low/moderate because SLA resolution window is ample and agent load is manageable."
+        
     # 6. Similar Ticket Retrieval
     similar_records = similarity_engine.find_similar_tickets(
         subject=subject,
@@ -441,6 +1041,7 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
         threshold=0.15
     )
     sim_exp = similarity_engine.explain_similarity(similar_records, threshold=0.15)
+    top_sim = similar_records[0] if similar_records else None
     
     # 7. Escalation Check
     escalation_info = check_escalation(
@@ -460,8 +1061,13 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
         "affected_users": affected_users,
         "created_at": created_time,
         "category": pred_category,
+        "category_keywords": category_keywords,
+        "category_why": category_why,
         "category_explanation": cat_exp,
         "priority": pred_priority,
+        "priority_score": priority_score,
+        "priority_reasons": priority_reasons,
+        "priority_why": priority_why,
         "priority_explanation": pri_exp,
         "response_deadline": sla_info["response_deadline"],
         "resolution_deadline": sla_info["resolution_deadline"],
@@ -469,17 +1075,21 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
         "resolution_sla_hours": sla_info["resolution_sla_hours"],
         "sla_status": sla_status,
         "time_display": time_display,
+        "sla_policy": sla_policy,
         "sla_explanation": sla_exp,
         "assigned_agent": assignment_info["assigned_agent"],
         "agent_skills": assignment_info["skills"],
         "agent_previous_load": assignment_info["previous_load"],
         "agent_new_load": assignment_info["new_load"],
+        "is_skill_matched": assignment_info["is_skill_matched"],
         "assignment_explanation": assignment_info["explanation"],
         "risk_percentage": risk_info["risk_percentage"],
         "risk_level": risk_info["risk_level"],
         "risk_reasons": risk_info["reasons"],
+        "risk_why": risk_why,
         "risk_explanation": risk_info["explanation"],
         "similar_records": similar_records,
+        "top_similar": top_sim,
         "similarity_explanation": sim_exp,
         "escalation_status": escalation_info["escalation_status"],
         "escalation_level": escalation_info["escalation_level"],
@@ -503,7 +1113,7 @@ def process_new_complaint(subject: str, description: str, affected_users: int = 
 # SCREEN 1: LANDING / ROLE SELECTION
 # -------------------------------------------------------------
 def render_landing_screen():
-    st.markdown("""
+    clean_markdown("""
         <div style="text-align: center; padding: 45px 0 15px 0;">
             <div style="display: inline-block; padding: 6px 16px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 20px; color: #60a5fa; font-weight: 600; font-size: 0.85rem; margin-bottom: 12px; letter-spacing: 0.5px;">
                 IT SERVICE MANAGEMENT PLATFORM
@@ -515,14 +1125,14 @@ def render_landing_screen():
                 Automated triage, intelligent routing and proactive SLA protection
             </p>
         </div>
-    """, unsafe_allow_html=True)
+    """)
     
     st.divider()
     
     col_left, col_right = st.columns(2)
     
     with col_left:
-        st.markdown("""
+        clean_markdown("""
             <div class="landing-card landing-card-emp">
                 <div style="font-size: 2.2rem; margin-bottom: 10px;">👨‍💻</div>
                 <h2 style="color: #60a5fa; margin: 0 0 10px 0; font-size: 1.6rem; font-weight: 700;">EMPLOYEE PORTAL</h2>
@@ -536,14 +1146,14 @@ def render_landing_screen():
                     <li>✓ Exportable official complaint reports (.TXT / .CSV)</li>
                 </ul>
             </div>
-        """, unsafe_allow_html=True)
+        """)
         st.write("")
         if st.button("🚀 Enter Employee Portal", use_container_width=True, type="primary"):
             st.session_state["current_role"] = "employee"
             st.rerun()
 
     with col_right:
-        st.markdown("""
+        clean_markdown("""
             <div class="landing-card landing-card-ops">
                 <div style="font-size: 2.2rem; margin-bottom: 10px;">🧑‍💼</div>
                 <h2 style="color: #c084fc; margin: 0 0 10px 0; font-size: 1.6rem; font-weight: 700;">IT OPERATIONS CENTER</h2>
@@ -557,7 +1167,7 @@ def render_landing_screen():
                     <li>✓ Skill-based workload balancing & status workflow manager</li>
                 </ul>
             </div>
-        """, unsafe_allow_html=True)
+        """)
         st.write("")
         if st.button("🛡️ Enter IT Operations Center", use_container_width=True, type="secondary"):
             st.session_state["current_role"] = "agent"
@@ -569,11 +1179,11 @@ def render_landing_screen():
     # System Status Section
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
-        st.markdown("<div style='text-align:center; color:#94a3b8; font-size:0.9rem;'><span style='color:#10b981; font-weight:bold;'>●</span> <strong>AI Triage Engine:</strong> <span style='color:#34d399;'>Online</span></div>", unsafe_allow_html=True)
+        clean_markdown("<div style='text-align:center; color:#94a3b8; font-size:0.9rem;'><span style='color:#10b981; font-weight:bold;'>●</span> <strong>AI Triage Engine:</strong> <span style='color:#34d399;'>Online</span></div>")
     with col_s2:
-        st.markdown("<div style='text-align:center; color:#94a3b8; font-size:0.9rem;'><span style='color:#10b981; font-weight:bold;'>●</span> <strong>SLA Monitoring:</strong> <span style='color:#34d399;'>Active</span></div>", unsafe_allow_html=True)
+        clean_markdown("<div style='text-align:center; color:#94a3b8; font-size:0.9rem;'><span style='color:#10b981; font-weight:bold;'>●</span> <strong>SLA Monitoring:</strong> <span style='color:#34d399;'>Active</span></div>")
     with col_s3:
-        st.markdown("<div style='text-align:center; color:#94a3b8; font-size:0.9rem;'><span style='color:#60a5fa; font-weight:bold;'>●</span> <strong>Ticket Intelligence:</strong> <span style='color:#60a5fa;'>Ready (1,000 Tickets)</span></div>", unsafe_allow_html=True)
+        clean_markdown("<div style='text-align:center; color:#94a3b8; font-size:0.9rem;'><span style='color:#60a5fa; font-weight:bold;'>●</span> <strong>Ticket Intelligence:</strong> <span style='color:#60a5fa;'>Ready (1,000 Tickets)</span></div>")
 
 
 # -------------------------------------------------------------
@@ -621,7 +1231,7 @@ def render_employee_dashboard():
         res_count = sum(1 for t in session_tickets if t["status"] == "Resolved")
 
         # 3 Colorful KPI Cards
-        st.markdown(f"""
+        clean_markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card kpi-blue">
                 <div class="kpi-title">OPEN</div>
@@ -639,7 +1249,7 @@ def render_employee_dashboard():
                 <div class="kpi-sub">Successfully closed requests</div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
 
         st.divider()
 
@@ -650,40 +1260,24 @@ def render_employee_dashboard():
             if not session_tickets:
                 st.info("No complaints submitted yet. Submit a new IT support request to get started.")
             else:
-                table_html = """
-                <div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 10px;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid rgba(71, 85, 105, 0.6); color: #94a3b8;">
-                                <th style="padding: 10px;">Ticket ID</th>
-                                <th style="padding: 10px;">Issue</th>
-                                <th style="padding: 10px;">Category</th>
-                                <th style="padding: 10px;">Priority</th>
-                                <th style="padding: 10px;">Status</th>
-                                <th style="padding: 10px;">Agent</th>
-                                <th style="padding: 10px;">SLA Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                """
-                for t in session_tickets[:5]:
-                    table_html += f"""
-                        <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); color: #f1f5f9;">
-                            <td style="padding: 10px; font-weight: 600; color: #60a5fa;">{t['ticket_id']}</td>
-                            <td style="padding: 10px;">{t['subject']}</td>
-                            <td style="padding: 10px;"><span class="badge badge-slate">{t['category']}</span></td>
-                            <td style="padding: 10px;">{get_priority_badge(t['priority'])}</td>
-                            <td style="padding: 10px;">{get_status_badge(t['status'])}</td>
-                            <td style="padding: 10px; color: #cbd5e1;">{t['assigned_agent']}</td>
-                            <td style="padding: 10px;">{get_sla_badge(t['sla_status'])}</td>
-                        </tr>
-                    """
-                table_html += "</tbody></table></div>"
-                st.markdown(table_html, unsafe_allow_html=True)
+                headers = ["Ticket ID", "Issue", "Category", "Priority", "Status", "Agent", "SLA Status"]
+                rows = [
+                    [
+                        f"<strong style='color:#60a5fa;'>{t['ticket_id']}</strong>",
+                        t['subject'],
+                        f"<span class='badge badge-slate'>{t['category']}</span>",
+                        get_priority_badge(t['priority']),
+                        get_status_badge(t['status']),
+                        f"<span style='color:#cbd5e1;'>{t['assigned_agent']}</span>",
+                        get_sla_badge(t['sla_status'])
+                    ]
+                    for t in session_tickets[:5]
+                ]
+                render_custom_table(headers, rows)
 
         with col_right:
             st.subheader("⚡ Quick Help")
-            st.markdown("""
+            clean_markdown("""
             <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(51, 65, 85, 0.6); border-radius: 12px; padding: 18px;">
                 <strong style="color: #60a5fa;">Common Support Categories:</strong>
                 <ul style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.8; margin-top: 8px; padding-left: 20px;">
@@ -694,7 +1288,7 @@ def render_employee_dashboard():
                     <li><strong>Printer:</strong> Paper Jams, Queues</li>
                 </ul>
             </div>
-            """, unsafe_allow_html=True)
+            """)
 
     # ---------------------------------------------------------
     # VIEW 2: New Complaint (Clean Real Form)
@@ -727,9 +1321,17 @@ def render_employee_dashboard():
                     st.toast(f"Warning: Ticket #{record['ticket_id']} is approaching its SLA deadline.", icon="⚠️")
                 
                 # Post-submission confirmation card (Employee-Facing)
-                st.markdown(f"""
+                clean_markdown(f"""
                 <div style="background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 12px; padding: 22px; margin-top: 15px;">
-                    <h3 style="color: #60a5fa; margin-top: 0;">Ticket Confirmation: <code>{record['ticket_id']}</code></h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(51,65,85,0.6); padding-bottom:12px; margin-bottom:14px;">
+                        <div>
+                            <span style="font-size:1.3rem; font-weight:700; color:#60a5fa;">AI TRIAGE COMPLETE ✓</span>
+                            <span style="margin-left:8px; font-family:monospace; color:#cbd5e1; font-size:1.05rem;">({record['ticket_id']})</span>
+                        </div>
+                        <div>
+                            {get_sla_badge(record['sla_status'])}
+                        </div>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin: 15px 0;">
                         <div><span style="color:#94a3b8; font-size:0.8rem;">Category:</span><br><strong>{record['category']}</strong></div>
                         <div><span style="color:#94a3b8; font-size:0.8rem;">Priority:</span><br>{get_priority_badge(record['priority'])}</div>
@@ -742,7 +1344,10 @@ def render_employee_dashboard():
                         ⏱️ <strong>Resolution Deadline:</strong> <code>{record['resolution_deadline'].strftime('%d %b %Y, %I:%M %p')}</code> ({record['sla_status']})
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
+
+                with st.expander("💡 How did AI decide?", expanded=True):
+                    render_employee_ai_summary(record)
 
     # ---------------------------------------------------------
     # VIEW 3: My Complaints & Live Chat with IT Agent
@@ -770,36 +1375,20 @@ def render_employee_dashboard():
             if cat_filter != "All":
                 filtered_list = [t for t in filtered_list if t["category"] == cat_filter]
 
-            table_html = """
-            <div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 10px; margin-bottom: 20px;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid rgba(71, 85, 105, 0.6); color: #94a3b8;">
-                            <th style="padding: 10px;">Ticket ID</th>
-                            <th style="padding: 10px;">Issue</th>
-                            <th style="padding: 10px;">Category</th>
-                            <th style="padding: 10px;">Priority</th>
-                            <th style="padding: 10px;">Status</th>
-                            <th style="padding: 10px;">Assigned Agent</th>
-                            <th style="padding: 10px;">SLA Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            """
-            for t in filtered_list:
-                table_html += f"""
-                    <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); color: #f1f5f9;">
-                        <td style="padding: 10px; font-weight: 600; color: #60a5fa;">{t['ticket_id']}</td>
-                        <td style="padding: 10px;">{t['subject']}</td>
-                        <td style="padding: 10px;"><span class="badge badge-slate">{t['category']}</span></td>
-                        <td style="padding: 10px;">{get_priority_badge(t['priority'])}</td>
-                        <td style="padding: 10px;">{get_status_badge(t['status'])}</td>
-                        <td style="padding: 10px; color: #cbd5e1;">{t['assigned_agent']}</td>
-                        <td style="padding: 10px;">{get_sla_badge(t['sla_status'])}</td>
-                    </tr>
-                """
-            table_html += "</tbody></table></div>"
-            st.markdown(table_html, unsafe_allow_html=True)
+            headers = ["Ticket ID", "Issue", "Category", "Priority", "Status", "Assigned Agent", "SLA Status"]
+            rows = [
+                [
+                    f"<strong style='color:#60a5fa;'>{t['ticket_id']}</strong>",
+                    t['subject'],
+                    f"<span class='badge badge-slate'>{t['category']}</span>",
+                    get_priority_badge(t['priority']),
+                    get_status_badge(t['status']),
+                    f"<span style='color:#cbd5e1;'>{t['assigned_agent']}</span>",
+                    get_sla_badge(t['sla_status'])
+                ]
+                for t in filtered_list
+            ]
+            render_custom_table(headers, rows)
 
             st.divider()
 
@@ -813,7 +1402,7 @@ def render_employee_dashboard():
 
             if selected_ticket:
                 # Ticket summary card
-                st.markdown(f"""
+                clean_markdown(f"""
                 <div style="background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(51, 65, 85, 0.6); padding-bottom: 12px; margin-bottom: 14px;">
                         <div>
@@ -837,7 +1426,10 @@ def render_employee_dashboard():
                         <strong>Description:</strong> {selected_ticket['description']}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
+
+                with st.expander("💡 How did AI decide this ticket?", expanded=False):
+                    render_employee_ai_summary(selected_ticket)
 
                 if selected_ticket["status"] == "Resolved":
                     st.success(
@@ -848,56 +1440,10 @@ def render_employee_dashboard():
 
                 st.divider()
 
-                # Chat with IT Agent (Modern Chat Interface)
-                st.subheader(f"💬 Chat with IT Agent — {selected_ticket['ticket_id']}")
+                # Communication with IT Support
+                st.subheader(f"💬 Communication with IT Support — {selected_ticket['ticket_id']}")
                 st.caption("Communicate directly with your assigned technician in real time.")
-
-                messages = selected_ticket.get("messages", [])
-                
-                chat_html = '<div class="chat-container">'
-                if not messages:
-                    chat_html += '<div style="text-align:center; color:#94a3b8; font-size:0.85rem; padding:10px;">No messages yet. Start a conversation with IT Support.</div>'
-                else:
-                    for msg in messages:
-                        sender = msg["sender"]
-                        ts = msg["timestamp"].strftime("%I:%M %p")
-                        text_body = msg["message"]
-                        
-                        if sender == "Employee":
-                            chat_html += f"""
-                            <div class="chat-msg-emp">
-                                <div>{text_body}</div>
-                                <span class="chat-meta">You (Employee) • {ts}</span>
-                            </div>
-                            """
-                        elif sender == "IT Agent":
-                            chat_html += f"""
-                            <div class="chat-msg-agent">
-                                <div>{text_body}</div>
-                                <span class="chat-meta">IT Agent ({selected_ticket['assigned_agent']}) • {ts}</span>
-                            </div>
-                            """
-                        else:
-                            chat_html += f"""
-                            <div class="chat-msg-sys">
-                                ℹ️ {text_body} • <span style="opacity:0.7;">{ts}</span>
-                            </div>
-                            """
-                chat_html += '</div>'
-                st.markdown(chat_html, unsafe_allow_html=True)
-
-                with st.form(f"emp_chat_form_{selected_ticket['ticket_id']}"):
-                    emp_msg_input = st.text_input("Type message to IT Agent:", placeholder="Type your message or question here...")
-                    send_btn = st.form_submit_button("Send Message", type="primary", use_container_width=True)
-
-                if send_btn and emp_msg_input.strip():
-                    selected_ticket["messages"].append({
-                        "sender": "Employee",
-                        "message": emp_msg_input.strip(),
-                        "timestamp": datetime.now()
-                    })
-                    st.toast("Message sent to IT Agent.", icon="📨")
-                    st.rerun()
+                render_ticket_chat(selected_ticket, viewer_role="employee")
 
     # ---------------------------------------------------------
     # VIEW 4: Complaint Report
@@ -921,7 +1467,7 @@ def render_employee_dashboard():
                 res_at_str = t_rec["resolved_at"].strftime('%Y-%m-%d %H:%M:%S') if is_resolved and t_rec.get("resolved_at") else "Resolution pending"
                 res_notes_str = t_rec.get("resolution_notes", "Resolved successfully") if is_resolved else "Resolution pending"
 
-                st.markdown(f"""
+                clean_markdown(f"""
                 <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 12px; padding: 24px; font-family: monospace;">
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(71, 85, 105, 0.6); padding-bottom: 12px; margin-bottom: 16px;">
                         <h3 style="margin: 0; color: #60a5fa;">IT SERVICE MANAGEMENT — COMPLAINT REPORT</h3>
@@ -944,7 +1490,7 @@ def render_employee_dashboard():
                     <hr style="border-color: rgba(71, 85, 105, 0.6); margin: 16px 0;">
                     <p style="margin: 0; color: #94a3b8; font-size: 0.85rem;"><strong>Description:</strong> {t_rec['description']}</p>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
 
                 st.write("")
 
@@ -1069,7 +1615,7 @@ def render_agent_dashboard():
     # ---------------------------------------------------------
     if agent_nav == "📊 Operations Overview":
         # Header with live status badge
-        st.markdown("""
+        clean_markdown("""
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div>
                 <h1 style="margin: 0; font-size: 2.2rem; font-weight: 700;">IT Operations Center</h1>
@@ -1079,12 +1625,12 @@ def render_agent_dashboard():
                 ● All systems operational
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
 
         st.divider()
 
         # LIVE OPERATIONS Top KPI Cards Grid
-        st.markdown(f"""
+        clean_markdown(f"""
         <div style="margin-bottom: 8px; font-weight: 700; color: #60a5fa; font-size: 0.95rem; letter-spacing: 0.5px;">
             LIVE OPERATIONS (SESSION)
         </div>
@@ -1130,7 +1676,7 @@ def render_agent_dashboard():
                 <div class="kpi-sub">Requiring supervision</div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
 
         st.divider()
 
@@ -1153,38 +1699,21 @@ def render_agent_dashboard():
             st.info("No active tickets in current session. Once an employee submits a complaint, live triage tracking will appear here.")
         else:
             st.markdown(f"##### ⚡ Live Incoming Triage Activity ({len(session_tickets)} Session Tickets)")
-            stream_html = """
-            <div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 10px; margin-bottom: 20px;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid rgba(71, 85, 105, 0.6); color: #94a3b8;">
-                            <th style="padding: 10px;">Ticket ID</th>
-                            <th style="padding: 10px;">Subject</th>
-                            <th style="padding: 10px;">Category</th>
-                            <th style="padding: 10px;">Priority</th>
-                            <th style="padding: 10px;">Agent</th>
-                            <th style="padding: 10px;">Breach Risk</th>
-                            <th style="padding: 10px;">Escalation</th>
-                            <th style="padding: 10px;">SLA Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            """
-            for t in session_tickets[:5]:
-                stream_html += f"""
-                    <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); color: #f1f5f9;">
-                        <td style="padding: 10px; font-weight: 600; color: #60a5fa;">{t['ticket_id']}</td>
-                        <td style="padding: 10px;">{t['subject']}</td>
-                        <td style="padding: 10px;"><span class="badge badge-slate">{t['category']}</span></td>
-                        <td style="padding: 10px;">{get_priority_badge(t['priority'])}</td>
-                        <td style="padding: 10px; color: #cbd5e1;">{t['assigned_agent']}</td>
-                        <td style="padding: 10px;">{get_risk_badge(t['risk_level'])} ({t['risk_percentage']}%)</td>
-                        <td style="padding: 10px;">{get_escalation_badge(t['escalation_level'])}</td>
-                        <td style="padding: 10px;">{get_sla_badge(t['sla_status'])}</td>
-                    </tr>
-                """
-            stream_html += "</tbody></table></div>"
-            st.markdown(stream_html, unsafe_allow_html=True)
+            headers = ["Ticket ID", "Subject", "Category", "Priority", "Agent", "Breach Risk", "Escalation", "SLA Status"]
+            rows = [
+                [
+                    f"<strong style='color:#60a5fa;'>{t['ticket_id']}</strong>",
+                    t['subject'],
+                    f"<span class='badge badge-slate'>{t['category']}</span>",
+                    get_priority_badge(t['priority']),
+                    f"<span style='color:#cbd5e1;'>{t['assigned_agent']}</span>",
+                    f"{get_risk_badge(t['risk_level'])} ({t['risk_percentage']}%)",
+                    get_escalation_badge(t['escalation_level']),
+                    get_sla_badge(t['sla_status'])
+                ]
+                for t in session_tickets[:5]
+            ]
+            render_custom_table(headers, rows)
             st.divider()
 
         # Operational Analytics Grid (Historical Baseline Knowledge)
@@ -1225,7 +1754,7 @@ def render_agent_dashboard():
         st.caption("Manage live queue operations, inspect transparent 🧠 AI Decision Trails, and update ticket statuses.")
 
         if not session_tickets:
-            st.info("No active tickets in current session. Submit a complaint from the Employee Portal to create live tickets.")
+            st.info("No active tickets.")
         else:
             col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(6)
             with col_f1:
@@ -1256,42 +1785,24 @@ def render_agent_dashboard():
                 sess_filtered = [t for t in sess_filtered if t["risk_level"] == f_risk]
 
             if sess_filtered:
-                table_html = """
-                <div style="overflow-x: auto; background: rgba(30, 41, 59, 0.5); border-radius: 10px; border: 1px solid rgba(51, 65, 85, 0.6); padding: 10px;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid rgba(71, 85, 105, 0.6); color: #94a3b8;">
-                                <th style="padding: 10px;">Ticket ID</th>
-                                <th style="padding: 10px;">Subject</th>
-                                <th style="padding: 10px;">Category</th>
-                                <th style="padding: 10px;">Priority</th>
-                                <th style="padding: 10px;">Status</th>
-                                <th style="padding: 10px;">Assigned Agent</th>
-                                <th style="padding: 10px;">SLA Status</th>
-                                <th style="padding: 10px;">Risk</th>
-                                <th style="padding: 10px;">Created</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                """
-                for t in sess_filtered:
-                    table_html += f"""
-                        <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); color: #f1f5f9;">
-                            <td style="padding: 10px; font-weight: 600; color: #60a5fa;">{t['ticket_id']}</td>
-                            <td style="padding: 10px;">{t['subject']}</td>
-                            <td style="padding: 10px;"><span class="badge badge-slate">{t['category']}</span></td>
-                            <td style="padding: 10px;">{get_priority_badge(t['priority'])}</td>
-                            <td style="padding: 10px;">{get_status_badge(t['status'])}</td>
-                            <td style="padding: 10px; color: #cbd5e1;">{t['assigned_agent']}</td>
-                            <td style="padding: 10px;">{get_sla_badge(t['sla_status'])}</td>
-                            <td style="padding: 10px;">{get_risk_badge(t['risk_level'])} ({t['risk_percentage']}%)</td>
-                            <td style="padding: 10px; color: #94a3b8;">{t['created_at'].strftime('%I:%M %p')}</td>
-                        </tr>
-                    """
-                table_html += "</tbody></table></div>"
-                st.markdown(table_html, unsafe_allow_html=True)
+                headers = ["Ticket ID", "Subject", "Category", "Priority", "Status", "Assigned Agent", "SLA Status", "Risk", "Created"]
+                rows = [
+                    [
+                        f"<strong style='color:#60a5fa;'>{t['ticket_id']}</strong>",
+                        t['subject'],
+                        f"<span class='badge badge-slate'>{t['category']}</span>",
+                        get_priority_badge(t['priority']),
+                        get_status_badge(t['status']),
+                        f"<span style='color:#cbd5e1;'>{t['assigned_agent']}</span>",
+                        get_sla_badge(t['sla_status']),
+                        f"{get_risk_badge(t['risk_level'])} ({t['risk_percentage']}%)",
+                        f"<span style='color:#94a3b8;'>{t['created_at'].strftime('%I:%M %p')}</span>"
+                    ]
+                    for t in sess_filtered
+                ]
+                render_custom_table(headers, rows)
             else:
-                st.info("No tickets matching current filters.")
+                st.info("No active tickets matching current filters.")
 
             st.divider()
 
@@ -1304,7 +1815,7 @@ def render_agent_dashboard():
 
             if inspected_t:
                 # Top Overview Card
-                st.markdown(f"""
+                clean_markdown(f"""
                 <div style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(51, 65, 85, 0.75); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(71, 85, 105, 0.5); padding-bottom: 10px; margin-bottom: 14px;">
                         <div>
@@ -1328,10 +1839,24 @@ def render_agent_dashboard():
                         <strong>Description:</strong> {inspected_t['description']}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
 
-                # Status Manager
-                st.markdown("#### ⚙️ Update Ticket Status")
+                # 1. AI DECISION TRAIL (EXPANDABLE TIMELINE)
+                with st.expander("🧠 AI Decision Trail (Step-by-Step Explainability)", expanded=True):
+                    st.caption("Transparent, multi-factor reasoning across all 7 stages of the automated IT incident pipeline.")
+                    render_ai_decision_trail(inspected_t)
+
+                st.divider()
+
+                # 2. EMPLOYEE COMMUNICATION CHANNEL
+                st.markdown("#### 💬 Employee Communication")
+                st.caption(f"Direct communication thread with employee for Ticket {inspected_t['ticket_id']}.")
+                render_ticket_chat(inspected_t, viewer_role="agent")
+
+                st.divider()
+
+                # 3. STATUS MANAGEMENT
+                st.markdown("#### ⚙️ Status Management")
                 col_stat_sel, col_stat_btn = st.columns([2, 1])
                 with col_stat_sel:
                     current_status_idx = ["Open", "In Progress", "Resolved"].index(inspected_t["status"])
@@ -1355,6 +1880,8 @@ def render_agent_dashboard():
                                 sla_met = bool(res_h <= inspected_t["resolution_sla_hours"])
                                 inspected_t["sla_result"] = "SLA Met" if sla_met else "SLA Breached"
                                 
+                                if "messages" not in inspected_t:
+                                    inspected_t["messages"] = []
                                 inspected_t["messages"].append({
                                     "sender": "System",
                                     "message": f"Ticket marked as Resolved by IT Agent ({inspected_t['assigned_agent']}). Outcome: {inspected_t['sla_result']} (Resolution Time: {res_h:.1f} hrs).",
@@ -1362,6 +1889,8 @@ def render_agent_dashboard():
                                 })
                                 st.toast(f"Ticket #{inspected_t['ticket_id']} resolved successfully.", icon="✅")
                             else:
+                                if "messages" not in inspected_t:
+                                    inspected_t["messages"] = []
                                 inspected_t["messages"].append({
                                     "sender": "System",
                                     "message": f"Ticket status updated to '{new_status_val}' by IT Agent ({inspected_t['assigned_agent']}).",
@@ -1369,108 +1898,6 @@ def render_agent_dashboard():
                                 })
                                 st.toast(f"Ticket #{inspected_t['ticket_id']} moved to {new_status_val}.", icon="🔄")
                             st.rerun()
-
-                st.divider()
-
-                # Customer Communication Channel for Agent
-                st.markdown("#### 💬 Customer Communication")
-                st.caption(f"Direct communication thread with employee for Ticket {inspected_t['ticket_id']}.")
-
-                messages = inspected_t.get("messages", [])
-                chat_html = '<div class="chat-container">'
-                if not messages:
-                    chat_html += '<div style="text-align:center; color:#94a3b8; font-size:0.85rem; padding:10px;">No messages yet. Send a reply below to reach the employee.</div>'
-                else:
-                    for msg in messages:
-                        sender = msg["sender"]
-                        ts = msg["timestamp"].strftime("%I:%M %p")
-                        text_body = msg["message"]
-                        
-                        if sender == "Employee":
-                            chat_html += f"""
-                            <div class="chat-msg-emp">
-                                <div>{text_body}</div>
-                                <span class="chat-meta">Employee • {ts}</span>
-                            </div>
-                            """
-                        elif sender == "IT Agent":
-                            chat_html += f"""
-                            <div class="chat-msg-agent">
-                                <div>{text_body}</div>
-                                <span class="chat-meta">You ({inspected_t['assigned_agent']}) • {ts}</span>
-                            </div>
-                            """
-                        else:
-                            chat_html += f"""
-                            <div class="chat-msg-sys">
-                                ℹ️ {text_body} • <span style="opacity:0.7;">{ts}</span>
-                            </div>
-                            """
-                chat_html += '</div>'
-                st.markdown(chat_html, unsafe_allow_html=True)
-
-                with st.form(f"agent_chat_form_{inspected_t['ticket_id']}"):
-                    agent_reply_input = st.text_input("Send reply to employee:", placeholder="Type support response or update...")
-                    send_reply_btn = st.form_submit_button("Send Reply", type="primary", use_container_width=True)
-
-                if send_reply_btn and agent_reply_input.strip():
-                    inspected_t["messages"].append({
-                        "sender": "IT Agent",
-                        "message": agent_reply_input.strip(),
-                        "timestamp": datetime.now()
-                    })
-                    st.toast("Reply sent to employee.", icon="📨")
-                    st.rerun()
-
-                st.divider()
-
-                # 🧠 AI DECISION TRAIL (EXPANDABLE TIMELINE)
-                with st.expander("🧠 AI Decision Trail (Step-by-Step Explainability)", expanded=True):
-                    st.caption("Transparent reasoning for automated triage, priority scoring, routing, and escalation.")
-
-                    st.markdown(f"""
-                    <div class="trail-step">
-                        <strong><span class="trail-num">1</span> CATEGORY CLASSIFICATION</strong><br>
-                        <strong>Predicted Category:</strong> <code>{inspected_t['category']}</code><br>
-                        <span style="color:#cbd5e1; font-size:0.88rem;"><strong>Reason:</strong> {inspected_t['category_explanation']}</span>
-                    </div>
-                    
-                    <div class="trail-step">
-                        <strong><span class="trail-num">2</span> PRIORITY SCORING</strong><br>
-                        <strong>Predicted Priority:</strong> {get_priority_badge(inspected_t['priority'])}<br>
-                        <span style="color:#cbd5e1; font-size:0.88rem;"><strong>Reason:</strong> {inspected_t['priority_explanation']}</span>
-                    </div>
-                    
-                    <div class="trail-step">
-                        <strong><span class="trail-num">3</span> INTELLIGENT ROUTING</strong><br>
-                        <strong>Assigned Agent:</strong> <code>{inspected_t['assigned_agent']}</code> (Skills: {', '.join(inspected_t['agent_skills'])})<br>
-                        <span style="color:#cbd5e1; font-size:0.88rem;"><strong>Reason:</strong> {inspected_t['assignment_explanation']}</span>
-                    </div>
-                    
-                    <div class="trail-step">
-                        <strong><span class="trail-num">4</span> SLA TARGET POLICY</strong><br>
-                        <strong>Response SLA:</strong> <code>{inspected_t['response_sla_hours']}h</code> | <strong>Resolution SLA:</strong> <code>{inspected_t['resolution_sla_hours']}h</code><br>
-                        <span style="color:#cbd5e1; font-size:0.88rem;"><strong>Reason:</strong> {inspected_t['sla_explanation']}</span>
-                    </div>
-                    
-                    <div class="trail-step">
-                        <strong><span class="trail-num">5</span> SLA BREACH-RISK PREDICTION</strong><br>
-                        <strong>Risk Estimate:</strong> {get_risk_badge(inspected_t['risk_level'])} ({inspected_t['risk_percentage']}%)<br>
-                        <span style="color:#cbd5e1; font-size:0.88rem;"><strong>Reason:</strong> {inspected_t['risk_explanation']}</span>
-                    </div>
-                    
-                    <div class="trail-step">
-                        <strong><span class="trail-num">6</span> HISTORICAL KNOWLEDGE MATCH</strong><br>
-                        <strong>Finding:</strong> <span style="color:#cbd5e1; font-size:0.88rem;">{inspected_t['similarity_explanation']}</span>
-                    </div>
-                    
-                    <div class="trail-step" style="border-left-color: #ef4444;">
-                        <strong><span class="trail-num" style="background:#ef4444;">7</span> AUTOMATED ESCALATION DECISION</strong><br>
-                        <strong>Escalation Level:</strong> {get_escalation_badge(inspected_t['escalation_level'])}<br>
-                        <strong>Recommended Action:</strong> <code>{inspected_t['escalation_action']}</code><br>
-                        <span style="color:#cbd5e1; font-size:0.88rem;"><strong>Trigger Reason:</strong> {inspected_t['escalation_explanation']}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
 
     # ---------------------------------------------------------
     # VIEW 3: Escalation Center
@@ -1491,12 +1918,12 @@ def render_agent_dashboard():
             ]
 
             if not live_escalations:
-                st.markdown("""
+                clean_markdown("""
                 <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 10px; padding: 20px; margin: 10px 0;">
                     <h4 style="color: #34d399; margin: 0 0 6px 0;">✓ No active escalations</h4>
                     <p style="color: #94a3b8; margin: 0;">All monitored live tickets are currently within their escalation thresholds.</p>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
             else:
                 for esc_t in live_escalations:
                     level = esc_t["escalation_level"]
@@ -1504,7 +1931,7 @@ def render_agent_dashboard():
                     border_color = "#ef4444" if is_critical else "#f59e0b"
                     bg_color = "rgba(239, 68, 68, 0.1)" if is_critical else "rgba(245, 158, 11, 0.1)"
                     
-                    st.markdown(f"""
+                    clean_markdown(f"""
                     <div style="background: {bg_color}; border: 1px solid {border_color}; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 10px; margin-bottom: 12px;">
                             <div>
@@ -1525,7 +1952,7 @@ def render_agent_dashboard():
                             <span style="color:#cbd5e1;"><strong>Reason:</strong> {esc_t['escalation_reasons'][0] if esc_t.get('escalation_reasons') else esc_t.get('escalation_reason', '')}</span>
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """)
 
         # TAB 2: Historical SLA Alerts
         with tab_hist_esc:
@@ -1578,7 +2005,7 @@ def render_agent_dashboard():
                     status_badge = '<span class="badge badge-green">LOW WORKLOAD</span>'
                     card_border = "#10b981"
 
-                st.markdown(f"""
+                clean_markdown(f"""
                 <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.7); border-left: 4px solid {card_border}; border-radius: 10px; padding: 14px 18px; margin-bottom: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <strong style="font-size: 1.1rem; color: #f8fafc;">{a['name']}</strong>
@@ -1589,7 +2016,7 @@ def render_agent_dashboard():
                         <strong>Active Queue:</strong> <span style="font-size: 1.05rem; font-weight: 700; color: #f8fafc;">{load}</span> tickets in queue
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
 
             if st.button("🔄 Reset Agent Workloads to 0", use_container_width=True):
                 st.session_state["agent_pool"] = get_fresh_session_agents()
@@ -1651,7 +2078,7 @@ def render_agent_dashboard():
         avg_res_h = float(df_historical["resolution_hours"].mean()) if "resolution_hours" in df_historical.columns else 0.0
         breach_pct = float((df_historical["sla_breached"] == True).mean()) * 100.0 if "sla_breached" in df_historical.columns else 0.0
 
-        st.markdown(f"""
+        clean_markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card kpi-blue">
                 <div class="kpi-title">TOTAL HISTORICAL TICKETS</div>
@@ -1674,7 +2101,7 @@ def render_agent_dashboard():
                 <div class="kpi-sub">Baseline risk factor</div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
 
         st.divider()
 
