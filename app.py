@@ -1098,7 +1098,8 @@ def process_new_complaint(
     cat_confidence_pct = cat_info.get("confidence_pct", "85.0%")
     cat_probabilities = cat_info.get("probabilities", {})
     cat_tokens = cat_info.get("contributing_tokens", [])
-    cat_why = cat_info.get("why", "Derived from subject and description.")
+    category_why = cat_info.get("why", "Derived from subject and description.")
+    cat_why = category_why
     cat_exp = explain_category(ticket_text)
     category_keywords = cat_info.get("matched_keywords", [])
     
